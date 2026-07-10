@@ -92,11 +92,32 @@ td.rownum{
   position:sticky;left:0;z-index:2;border-right:2px solid var(--line);
 }
 td.rownum input.ptname{
-  width:100%;height:52px;border:none;background:transparent;
-  font-family:inherit;font-size:15px;font-weight:600;text-align:center;
+  width:100%;height:32px;border:none;background:transparent;
+  font-family:inherit;font-size:14px;font-weight:600;text-align:center;
   padding:0 2px;color:var(--ink);
 }
 td.rownum input.ptname:focus{outline:none;background:#FFF9DE}
+.insbtn{
+  display:block;width:100%;height:18px;border:none;background:transparent;
+  color:var(--green-d);font-size:10px;font-weight:700;padding:0;line-height:18px;
+}
+.insbtn:active{background:#DCE9D6}
+
+/* ===== 行選択モード ===== */
+tbody.selmode input{pointer-events:none}
+tbody.selmode .insbtn{visibility:hidden}
+tbody.selmode td.rownum{cursor:pointer}
+tr.selrow td{background:#FDE3E0 !important}
+tr.selrow td.rownum{background:#F6C6C0 !important}
+.selbar{
+  display:none;position:fixed;left:0;right:0;bottom:0;z-index:60;
+  background:var(--green-d);padding:12px;gap:10px;align-items:center;
+  box-shadow:0 -3px 10px rgba(0,0,0,.25);
+}
+.selbar.show{display:flex}
+.selcount{flex:1;color:#fff;font-size:15px;font-weight:700}
+.selbar .pbtn{background:#fff}
+.selbar .pbtn.seldel{background:#C0392B;border-color:#C0392B;color:#fff}
 td input{
   width:100%;height:52px;border:none;background:transparent;
   font-family:var(--mono);font-size:17px;text-align:right;padding:0 6px;color:var(--ink);
@@ -158,7 +179,7 @@ td.adjv{font-weight:700}
   header h1{color:#000;font-size:18px}
   header input{background:transparent;color:#000;border:none;font-size:15px}
   header input::placeholder{color:transparent}
-  .tabs,.toolbar,.btn,.projbar,.ovl{display:none !important}
+  .tabs,.toolbar,.btn,.projbar,.ovl,.insbtn,.selbar{display:none !important}
   .panel{display:block !important}
   .tablewrap{overflow:visible}
   table{min-width:0;width:100%}
@@ -243,6 +264,25 @@ td.adjv{font-weight:700}
       <button class="pbtn danger" onclick="confirmDelDate()">削除する</button>
     </div>
   </div>
+</div>
+
+<!-- 削除確認ダイアログ(行) -->
+<div class="ovl" id="delRowDlg">
+  <div class="dlg">
+    <h3>行の削除</h3>
+    <p id="delRowMsg" style="font-size:14px;line-height:1.7;color:#444"></p>
+    <div class="dlg-btns">
+      <button class="pbtn" onclick="closeDlg('delRowDlg')">キャンセル</button>
+      <button class="pbtn danger" onclick="confirmDelRow()">削除する</button>
+    </div>
+  </div>
+</div>
+
+<!-- 行選択中の操作バー -->
+<div class="selbar" id="selbar">
+  <span id="selCount" class="selcount">0行選択中</span>
+  <button class="pbtn" onclick="exitSel()">キャンセル</button>
+  <button class="pbtn seldel" onclick="openDelSelDlg()">削除</button>
 </div>
 
 <div class="tabs">
@@ -330,7 +370,7 @@ td.adjv{font-weight:700}
 <script>
 const N_START = 15;
 // 各行: {name(測点名), bs, fs, gh0(1行目のみ手入力GH), plan}
-function blankRows(){ return Array.from({length:N_START},(_,i)=>({name:String(i+1),bs:"",fs:"",gh0:"",plan:""})); }
+function blankRows(){ return Array.from({length:N_START},(_,i)=>({name:i===0?"KBM":"No."+i,bs:"",fs:"",gh0:"",plan:""})); }
 let rows = blankRows();
 
 /* ===== 保存(工事→日付ごと) ===== */
@@ -358,6 +398,12 @@ function loadStore(){
     if(!p.currentDateId || !p.dates[p.currentDateId]){
       p.currentDateId=Object.keys(p.dates)[0];
     }
+    // 旧初期名(1,2,3...)をKBM/No.形式へ移行(手入力した名前は変更しない)
+    Object.values(p.dates).forEach(d=>{
+      (d.rows||[]).forEach((r,i)=>{
+        if(r.name===String(i+1)){ r.name = i===0? "KBM" : "No."+i; }
+      });
+    });
   });
   if(!store.currentId || !store.projects[store.currentId]){
     const id="p"+Date.now();
@@ -480,10 +526,68 @@ function tab(i){
   document.getElementById("p1").classList.toggle("on",i===1);
 }
 function addRows(n){
-  for(let k=0;k<n;k++) rows.push({name:String(rows.length+1),bs:"",fs:"",gh0:"",plan:""});
+  for(let k=0;k<n;k++) rows.push({name:"No."+rows.length,bs:"",fs:"",gh0:"",plan:""});
   render(); calc(); saveStore();
 }
 function upd(i,k,v){ rows[i][k]=v; calc(); saveStore(); }
+// i行の下に空の行を挿入
+function insertRow(i){
+  rows.splice(i+1,0,{name:"",bs:"",fs:"",gh0:"",plan:""});
+  render(); calc(); saveStore();
+  const el=document.querySelectorAll(".ptname")[i+1];
+  if(el){ el.focus(); }
+}
+
+// 測点セル長押しで選択モード開始
+let pressTimer=null, selMode=false, selected=new Set();
+function rowPress(i){
+  rowPressCancel();
+  pressTimer=setTimeout(()=>{ enterSel(i); },600);
+}
+function rowPressCancel(){ clearTimeout(pressTimer); }
+function enterSel(i){
+  rowPressCancel();
+  selMode=true;
+  selected.add(i);
+  updateSelView();
+}
+function selTap(i){
+  if(!selMode) return;
+  if(selected.has(i)){ selected.delete(i); } else { selected.add(i); }
+  if(selected.size===0){ exitSel(); return; }
+  updateSelView();
+}
+function exitSel(){
+  selMode=false; selected.clear();
+  updateSelView();
+}
+function updateSelView(){
+  const tb=document.getElementById("tb");
+  tb.classList.toggle("selmode",selMode);
+  tb.querySelectorAll("tr").forEach((tr,i)=>{
+    tr.classList.toggle("selrow",selected.has(i));
+  });
+  const bar=document.getElementById("selbar");
+  if(selMode){
+    document.getElementById("selCount").textContent=selected.size+"行選択中";
+    bar.classList.add("show");
+  }else{
+    bar.classList.remove("show");
+  }
+}
+function openDelSelDlg(){
+  if(selected.size===0) return;
+  const names=[...selected].sort((a,b)=>a-b).map(i=>rows[i].name||("("+(i+1)+"行目)")).join("、");
+  document.getElementById("delRowMsg").textContent=`選択した${selected.size}行(${names})を削除します。入力した値も消えます。`;
+  document.getElementById("delRowDlg").classList.add("show");
+}
+function confirmDelRow(){
+  [...selected].sort((a,b)=>b-a).forEach(i=>rows.splice(i,1));
+  if(rows.length===0) rows=blankRows();
+  closeDlg("delRowDlg");
+  exitSel();
+  render(); calc(); saveStore();
+}
 function num(v){ const n=parseFloat(v); return isNaN(n)?null:n; }
 function f3(v){ return v==null?"":v.toFixed(3); }
 
@@ -491,17 +595,33 @@ function render(){
   const tb=document.getElementById("tb");
   tb.innerHTML=rows.map((r,i)=>`
     <tr>
-      <td class="rownum"><input type="text" class="ptname" value="${r.name}" oninput="upd(${i},'name',this.value)"></td>
+      <td class="rownum" ontouchstart="rowPress(${i})" ontouchend="rowPressCancel()" ontouchmove="rowPressCancel()" onclick="selTap(${i})" oncontextmenu="enterSel(${i});return false">
+        <input type="text" class="ptname" value="${r.name}" placeholder="測点" oninput="upd(${i},'name',this.value)">
+        <button class="insbtn" onclick="insertRow(${i})" tabindex="-1">＋挿入</button>
+      </td>
       <td><input type="number" inputmode="decimal" step="0.001" value="${r.bs}" oninput="upd(${i},'bs',this.value)"></td>
       <td class="calc" id="ih${i}"></td>
-      <td>${i===0?"":`<input type="number" inputmode="decimal" step="0.001" value="${r.fs}" oninput="upd(${i},'fs',this.value)">`}</td>
+      <td>${i===0?"":`<input type="number" inputmode="decimal" step="0.001" value="${r.fs}" data-col="fs" data-row="${i}" enterkeyhint="next" onkeydown="nextCell(event,${i},'fs')" oninput="upd(${i},'fs',this.value)">`}</td>
       <td>${i===0
         ?`<input type="number" inputmode="decimal" step="0.001" value="${r.gh0}" placeholder="基準標高" oninput="upd(${i},'gh0',this.value)" style="color:var(--ink)">`
         :`<span class="calc" style="display:block;text-align:right;padding:0 6px" id="gh${i}"></span>`}</td>
-      <td><input type="number" inputmode="decimal" step="0.001" value="${r.plan}" oninput="upd(${i},'plan',this.value)"></td>
+      <td>${i===0
+        ?`<span style="display:block;text-align:center;color:#BBB">─</span>`
+        :`<input type="number" inputmode="decimal" step="0.001" value="${r.plan}" data-col="plan" data-row="${i}" enterkeyhint="next" onkeydown="nextCell(event,${i},'plan')" oninput="upd(${i},'plan',this.value)">`}</td>
       <td class="calc reading" id="rd${i}"></td>
       <td class="calc" id="df${i}"></td>
     </tr>`).join("");
+}
+
+// Enter(次へ)キーで同じ列の下のセルへ移動
+function nextCell(e,i,col){
+  if(e.key!=="Enter") return;
+  e.preventDefault();
+  for(let j=i+1;j<rows.length;j++){
+    const el=document.querySelector(`input[data-col="${col}"][data-row="${j}"]`);
+    if(el){ el.focus(); el.select&&el.select(); return; }
+  }
+  e.target.blur(); // 最終行なら閉じる
 }
 
 let ghArr=[], ihShown=[];

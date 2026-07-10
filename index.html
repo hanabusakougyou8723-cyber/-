@@ -83,7 +83,7 @@ th{
 th small{display:block;font-size:11px;font-weight:600;color:#444}
 th.plan-th{background:#D9E4D0}
 td{
-  border:1px solid var(--line);height:52px;padding:0;
+  border:1px solid var(--line);height:56px;padding:0;
   font-family:var(--mono);font-size:15px;
 }
 td.rownum{
@@ -92,20 +92,13 @@ td.rownum{
   position:sticky;left:0;z-index:2;border-right:2px solid var(--line);
 }
 td.rownum input.ptname{
-  width:100%;height:32px;border:none;background:transparent;
+  width:100%;height:56px;border:none;background:transparent;
   font-family:inherit;font-size:14px;font-weight:600;text-align:center;
   padding:0 2px;color:var(--ink);
 }
 td.rownum input.ptname:focus{outline:none;background:#FFF9DE}
-.insbtn{
-  display:block;width:100%;height:18px;border:none;background:transparent;
-  color:var(--green-d);font-size:10px;font-weight:700;padding:0;line-height:18px;
-}
-.insbtn:active{background:#DCE9D6}
-
 /* ===== 行選択モード ===== */
 tbody.selmode input{pointer-events:none}
-tbody.selmode .insbtn{visibility:hidden}
 tbody.selmode td.rownum{cursor:pointer}
 tr.selrow td{background:#FDE3E0 !important}
 tr.selrow td.rownum{background:#F6C6C0 !important}
@@ -117,9 +110,10 @@ tr.selrow td.rownum{background:#F6C6C0 !important}
 .selbar.show{display:flex}
 .selcount{flex:1;color:#fff;font-size:15px;font-weight:700}
 .selbar .pbtn{background:#fff}
+.selbar .pbtn.selins{background:#fff;border-color:#fff;color:var(--green-d)}
 .selbar .pbtn.seldel{background:#C0392B;border-color:#C0392B;color:#fff}
 td input{
-  width:100%;height:52px;border:none;background:transparent;
+  width:100%;height:56px;border:none;background:transparent;
   font-family:var(--mono);font-size:15px;text-align:right;padding:0 4px;color:var(--ink);
 }
 td input:focus{outline:none;background:#FFF9DE}
@@ -283,6 +277,7 @@ td.adjv{font-weight:700}
 <div class="selbar" id="selbar">
   <span id="selCount" class="selcount">0行選択中</span>
   <button class="pbtn" onclick="exitSel()">キャンセル</button>
+  <button class="pbtn selins" onclick="insertBelowSelected()">挿入</button>
   <button class="pbtn seldel" onclick="openDelSelDlg()">削除</button>
 </div>
 
@@ -531,13 +526,6 @@ function addRows(n){
   render(); calc(); saveStore();
 }
 function upd(i,k,v){ rows[i][k]=v; calc(); saveStore(); }
-// i行の下に空の行を挿入
-function insertRow(i){
-  rows.splice(i+1,0,{name:"",bs:"",fs:"",gh0:"",plan:""});
-  render(); calc(); saveStore();
-  const el=document.querySelectorAll(".ptname")[i+1];
-  if(el){ el.focus(); }
-}
 
 // 測点セル長押しで選択モード開始
 let pressTimer=null, selMode=false, selected=new Set();
@@ -576,6 +564,19 @@ function updateSelView(){
     bar.classList.remove("show");
   }
 }
+// 選択した行のすぐ下に空行を挿入
+function insertBelowSelected(){
+  if(selected.size===0) return;
+  const first=[...selected].sort((a,b)=>a-b)[0];
+  [...selected].sort((a,b)=>b-a).forEach(i=>{
+    rows.splice(i+1,0,{name:"",bs:"",fs:"",gh0:"",plan:""});
+  });
+  exitSel();
+  render(); calc(); saveStore();
+  const el=document.querySelectorAll(".ptname")[first+1];
+  if(el){ el.focus(); }
+}
+
 function openDelSelDlg(){
   if(selected.size===0) return;
   const names=[...selected].sort((a,b)=>a-b).map(i=>rows[i].name||("("+(i+1)+"行目)")).join("、");
@@ -598,7 +599,6 @@ function render(){
     <tr>
       <td class="rownum" ontouchstart="rowPress(${i})" ontouchend="rowPressCancel()" ontouchmove="rowPressCancel()" onclick="selTap(${i})" oncontextmenu="enterSel(${i});return false">
         <input type="text" class="ptname" value="${r.name}" placeholder="測点" oninput="upd(${i},'name',this.value)">
-        <button class="insbtn" onclick="insertRow(${i})" tabindex="-1">＋挿入</button>
       </td>
       <td><input type="number" inputmode="decimal" step="0.001" value="${r.bs}" oninput="upd(${i},'bs',this.value)"></td>
       <td class="calc" id="ih${i}"></td>

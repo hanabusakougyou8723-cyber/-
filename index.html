@@ -42,7 +42,7 @@ header input::placeholder{color:rgba(255,255,255,.6)}
 
 /* ===== 野帳テーブル ===== */
 .tablewrap{overflow-x:auto;background:var(--paper);-webkit-overflow-scrolling:touch}
-table{border-collapse:collapse;width:100%;min-width:660px}
+table{border-collapse:collapse;width:100%;min-width:760px}
 th{
   background:var(--head);border:1px solid var(--line);
   padding:6px 2px;font-size:16px;font-weight:700;line-height:1.2;
@@ -55,9 +55,15 @@ td{
 }
 td.rownum{
   background:var(--rownum);text-align:center;font-family:inherit;
-  font-size:17px;min-width:46px;width:46px;
+  font-size:17px;min-width:64px;width:64px;
   position:sticky;left:0;z-index:2;border-right:2px solid var(--line);
 }
+td.rownum input.ptname{
+  width:100%;height:52px;border:none;background:transparent;
+  font-family:inherit;font-size:15px;font-weight:600;text-align:center;
+  padding:0 2px;color:var(--ink);
+}
+td.rownum input.ptname:focus{outline:none;background:#FFF9DE}
 td input{
   width:100%;height:52px;border:none;background:transparent;
   font-family:var(--mono);font-size:17px;text-align:right;padding:0 6px;color:var(--ink);
@@ -65,7 +71,7 @@ td input{
 td input:focus{outline:none;background:#FFF9DE}
 td.calc{color:var(--calc);text-align:right;padding:0 6px;font-weight:500}
 td.reading{background:#F3FBF1;font-weight:700}
-col.c-pt{width:46px}
+col.c-pt{width:64px}
 col.c-num{width:98px}
 
 .toolbar{
@@ -107,6 +113,31 @@ table.corr td:first-child{text-align:center;font-family:inherit}
 td.minus{color:#C0392B}
 td.adjv{font-weight:700}
 .note{font-size:12px;color:#666;line-height:1.7;margin-top:10px}
+
+/* ===== PDF出力(印刷)用 ===== */
+@media print{
+  @page{size:A4 landscape;margin:10mm}
+  body{background:#fff;padding-bottom:0;font-size:11px}
+  header{position:static;background:#fff;color:#000;border-bottom:2px solid #000;padding:6px 0}
+  header h1{color:#000;font-size:18px}
+  header input{background:transparent;color:#000;border:none;font-size:15px}
+  header input::placeholder{color:transparent}
+  .tabs,.toolbar,.btn{display:none !important}
+  .panel{display:block !important}
+  .tablewrap{overflow:visible}
+  table{min-width:0;width:100%}
+  td{height:auto}
+  td input{height:auto;padding:4px 4px;font-size:12px}
+  td.rownum input.ptname{height:auto;font-size:11px}
+  th{font-size:11px}
+  th small{font-size:8px}
+  td.calc{font-size:12px}
+  .checksum{border:1px solid #000;margin:8px 0}
+  main.pad{padding:8px 0;max-width:none}
+  .sec{border:1px solid #000;page-break-inside:avoid}
+  #p1{page-break-before:always}
+  input:focus{background:transparent}
+}
 </style>
 </head>
 <body>
@@ -127,7 +158,7 @@ td.adjv{font-weight:700}
     <table>
       <colgroup>
         <col class="c-pt"><col class="c-num"><col class="c-num"><col class="c-num">
-        <col class="c-num"><col class="c-num"><col class="c-num">
+        <col class="c-num"><col class="c-num"><col class="c-num"><col class="c-num">
       </colgroup>
       <thead>
         <tr>
@@ -138,6 +169,7 @@ td.adjv{font-weight:700}
           <th>GH<small>地盤高</small></th>
           <th class="plan-th">計画高<small>入 力</small></th>
           <th class="plan-th">読み<small>IH−計画高</small></th>
+          <th class="plan-th">差<small>読み−FS</small></th>
         </tr>
       </thead>
       <tbody id="tb"></tbody>
@@ -146,6 +178,7 @@ td.adjv{font-weight:700}
   <div class="toolbar">
     <span class="unit">単位:メートル(m) ／ 測点1のGHに基準標高を入力</span>
     <button class="btn" onclick="addRows(5)">＋5行</button>
+    <button class="btn" onclick="window.print()">PDF出力</button>
   </div>
   <div class="checksum" id="checksum"></div>
 </div>
@@ -198,8 +231,8 @@ td.adjv{font-weight:700}
 
 <script>
 const N_START = 15;
-// 各行: {bs, fs, gh0(1行目のみ手入力GH), plan}
-let rows = Array.from({length:N_START},()=>({bs:"",fs:"",gh0:"",plan:""}));
+// 各行: {name(測点名), bs, fs, gh0(1行目のみ手入力GH), plan}
+let rows = Array.from({length:N_START},(_,i)=>({name:String(i+1),bs:"",fs:"",gh0:"",plan:""}));
 
 function tab(i){
   document.getElementById("t0").classList.toggle("on",i===0);
@@ -208,7 +241,7 @@ function tab(i){
   document.getElementById("p1").classList.toggle("on",i===1);
 }
 function addRows(n){
-  for(let k=0;k<n;k++) rows.push({bs:"",fs:"",gh0:"",plan:""});
+  for(let k=0;k<n;k++) rows.push({name:String(rows.length+1),bs:"",fs:"",gh0:"",plan:""});
   render(); calc();
 }
 function upd(i,k,v){ rows[i][k]=v; calc(); }
@@ -219,7 +252,7 @@ function render(){
   const tb=document.getElementById("tb");
   tb.innerHTML=rows.map((r,i)=>`
     <tr>
-      <td class="rownum">${i+1}</td>
+      <td class="rownum"><input type="text" class="ptname" value="${r.name}" oninput="upd(${i},'name',this.value)"></td>
       <td><input type="number" inputmode="decimal" step="0.001" value="${r.bs}" oninput="upd(${i},'bs',this.value)"></td>
       <td class="calc" id="ih${i}"></td>
       <td>${i===0?"":`<input type="number" inputmode="decimal" step="0.001" value="${r.fs}" oninput="upd(${i},'fs',this.value)">`}</td>
@@ -228,6 +261,7 @@ function render(){
         :`<span class="calc" style="display:block;text-align:right;padding:0 6px" id="gh${i}"></span>`}</td>
       <td><input type="number" inputmode="decimal" step="0.001" value="${r.plan}" oninput="upd(${i},'plan',this.value)"></td>
       <td class="calc reading" id="rd${i}"></td>
+      <td class="calc" id="df${i}"></td>
     </tr>`).join("");
 }
 
@@ -257,6 +291,8 @@ function calc(){
       if(ghEl) ghEl.textContent = f3(g);
     }
     const rdEl=document.getElementById("rd"+i);
+    const dfEl=document.getElementById("df"+i);
+    let readVal=null;
     if(rdEl){
       const plan=num(r.plan);
       // 読みは「その測点を視準している時のIH」= もりかえ前のIH
@@ -265,7 +301,18 @@ function calc(){
         return (g!=null && num(r.fs)!=null)? g+num(r.fs) : (i===0? ihShown[0]: currentIHBefore(i));
       })();
       if(i===0) ihForRead=ihShown[0];
-      rdEl.textContent = (plan!=null && ihForRead!=null)? f3(ihForRead-plan) : "";
+      if(plan!=null && ihForRead!=null){ readVal=ihForRead-plan; }
+      rdEl.textContent = readVal!=null? f3(readVal) : "";
+    }
+    if(dfEl){
+      const fsv=num(r.fs);
+      if(readVal!=null && fsv!=null && i>0){
+        const d=readVal-fsv; // ＋:計画より高い(切土) −:計画より低い(盛土)
+        const mm=Math.round(d*1000);
+        if(mm===0){ dfEl.innerHTML='<span style="color:#2E8B57;font-weight:700">±0</span>'; }
+        else if(d>0){ dfEl.innerHTML=`<span style="color:#C0392B;font-weight:700">+${d.toFixed(3)}<small style="font-size:10px"> 高</small></span>`; }
+        else{ dfEl.innerHTML=`<span style="color:#1D5FA8;font-weight:700">${d.toFixed(3)}<small style="font-size:10px"> 低</small></span>`; }
+      }else{ dfEl.textContent=""; }
     }
   });
 
@@ -309,11 +356,11 @@ function calc(){
   const idx=[]; // GHが計算された測点(起点除く)
   for(let i=1;i<rows.length;i++){ if(ghArr[i]!=null) idx.push(i); }
   const total=idx.length;
-  let html=`<tr><td>1</td><td>${f3(ghArr[0])}</td><td>±0.0mm</td><td class="adjv">${f3(ghArr[0])}</td></tr>`;
+  let html=`<tr><td>${rows[0].name||"1"}</td><td>${f3(ghArr[0])}</td><td>±0.0mm</td><td class="adjv">${f3(ghArr[0])}</td></tr>`;
   idx.forEach((i,j)=>{
     const corr=-E*((j+1)/total);
     const adj=ghArr[i]+corr;
-    html+=`<tr><td>${i+1}</td><td>${f3(ghArr[i])}</td><td class="minus">${(corr*1000>=0?"+":"")+(corr*1000).toFixed(1)}mm</td><td class="adjv">${adj.toFixed(3)}</td></tr>`;
+    html+=`<tr><td>${rows[i].name||i+1}</td><td>${f3(ghArr[i])}</td><td class="minus">${(corr*1000>=0?"+":"")+(corr*1000).toFixed(1)}mm</td><td class="adjv">${adj.toFixed(3)}</td></tr>`;
   });
   body.innerHTML=html;
 }

@@ -36,6 +36,8 @@ header input::placeholder{color:rgba(255,255,255,.6)}
   background:#EFF3EC;border-bottom:1px solid #CCC;
   padding:8px 12px;display:flex;gap:8px;align-items:center;
 }
+.projbar.datebar{background:#E7EEE3}
+.plabel{font-size:12px;font-weight:700;color:var(--green-d);flex-shrink:0;width:28px}
 .projbar select{
   flex:1;min-width:0;padding:9px 8px;border:1px solid #BBB;border-radius:8px;
   font-size:15px;background:#fff;
@@ -145,9 +147,12 @@ td.minus{color:#C0392B}
 td.adjv{font-weight:700}
 .note{font-size:12px;color:#666;line-height:1.7;margin-top:10px}
 
+.printonly{display:none}
+
 /* ===== PDF出力(印刷)用 ===== */
 @media print{
   @page{size:A4 landscape;margin:10mm}
+  .printonly{display:inline;font-size:14px;font-weight:700;margin-left:12px}
   body{background:#fff;padding-bottom:0;font-size:11px}
   header{position:static;background:#fff;color:#000;border-bottom:2px solid #000;padding:6px 0}
   header h1{color:#000;font-size:18px}
@@ -176,12 +181,20 @@ td.adjv{font-weight:700}
 <header>
   <h1>野帳</h1>
   <input type="text" id="site" placeholder="工事名(例:下水道)" oninput="renameProject(this.value)">
+  <span id="printDate" class="printonly"></span>
 </header>
 
 <div class="projbar">
+  <span class="plabel">工事</span>
   <select id="projSel" onchange="switchProject(this.value)"></select>
   <button class="pbtn" onclick="openNewDlg()">＋新規</button>
   <button class="pbtn danger" onclick="openDelDlg()">削除</button>
+</div>
+<div class="projbar datebar">
+  <span class="plabel">日付</span>
+  <select id="dateSel" onchange="switchDate(this.value)"></select>
+  <button class="pbtn" onclick="openNewDateDlg()">＋追加</button>
+  <button class="pbtn danger" onclick="openDelDateDlg()">削除</button>
 </div>
 
 <!-- 新規工事ダイアログ -->
@@ -196,7 +209,7 @@ td.adjv{font-weight:700}
   </div>
 </div>
 
-<!-- 削除確認ダイアログ -->
+<!-- 削除確認ダイアログ(工事) -->
 <div class="ovl" id="delDlg">
   <div class="dlg">
     <h3>工事データの削除</h3>
@@ -204,6 +217,30 @@ td.adjv{font-weight:700}
     <div class="dlg-btns">
       <button class="pbtn" onclick="closeDlg('delDlg')">キャンセル</button>
       <button class="pbtn danger" onclick="confirmDel()">削除する</button>
+    </div>
+  </div>
+</div>
+
+<!-- 新規日付ダイアログ -->
+<div class="ovl" id="newDateDlg">
+  <div class="dlg">
+    <h3>日付を追加</h3>
+    <input type="date" id="newDate">
+    <div class="dlg-btns">
+      <button class="pbtn" onclick="closeDlg('newDateDlg')">キャンセル</button>
+      <button class="pbtn primary" onclick="confirmNewDate()">追加</button>
+    </div>
+  </div>
+</div>
+
+<!-- 削除確認ダイアログ(日付) -->
+<div class="ovl" id="delDateDlg">
+  <div class="dlg">
+    <h3>日付データの削除</h3>
+    <p id="delDateMsg" style="font-size:14px;line-height:1.7;color:#444"></p>
+    <div class="dlg-btns">
+      <button class="pbtn" onclick="closeDlg('delDateDlg')">キャンセル</button>
+      <button class="pbtn danger" onclick="confirmDelDate()">削除する</button>
     </div>
   </div>
 </div>
@@ -296,50 +333,84 @@ const N_START = 15;
 function blankRows(){ return Array.from({length:N_START},(_,i)=>({name:String(i+1),bs:"",fs:"",gh0:"",plan:""})); }
 let rows = blankRows();
 
-/* ===== 保存(工事ごと) ===== */
+/* ===== 保存(工事→日付ごと) ===== */
 const STORE="yacho_store_v1";
 let store={projects:{},currentId:null};
+function today(){ const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+function blankDate(dateStr){ return {date:dateStr||today(),rows:blankRows(),knownH:"",grade:"10",routeKm:""}; }
+function blankProject(name){
+  const did="d"+Date.now();
+  return {name:name||"工事1",dates:{[did]:blankDate()},currentDateId:did};
+}
 function loadStore(){
   try{
     const s=localStorage.getItem(STORE);
     if(s){ store=JSON.parse(s); }
   }catch(e){}
+  // 旧形式(日付なし)からの自動移行
+  Object.values(store.projects||{}).forEach(p=>{
+    if(!p.dates){
+      const did="d"+Date.now()+Math.random().toString(36).slice(2,6);
+      p.dates={[did]:{date:today(),rows:p.rows||blankRows(),knownH:p.knownH||"",grade:p.grade||"10",routeKm:p.routeKm||""}};
+      p.currentDateId=did;
+      delete p.rows; delete p.knownH; delete p.grade; delete p.routeKm;
+    }
+    if(!p.currentDateId || !p.dates[p.currentDateId]){
+      p.currentDateId=Object.keys(p.dates)[0];
+    }
+  });
   if(!store.currentId || !store.projects[store.currentId]){
     const id="p"+Date.now();
-    store.projects[id]={name:"工事1",rows:blankRows(),knownH:"",grade:"10",routeKm:""};
+    store.projects[id]=blankProject("工事1");
     store.currentId=id;
   }
 }
+function curProj(){ return store.projects[store.currentId]; }
+function curDate(){ const p=curProj(); return p? p.dates[p.currentDateId] : null; }
 let saveTimer=null;
 function saveStore(){
   clearTimeout(saveTimer);
   saveTimer=setTimeout(()=>{
-    const p=store.projects[store.currentId];
-    if(p){
-      p.rows=rows;
-      p.knownH=document.getElementById("knownH").value;
-      p.grade=document.getElementById("grade").value;
-      p.routeKm=document.getElementById("routeKm").value;
+    const d=curDate();
+    if(d){
+      d.rows=rows;
+      d.knownH=document.getElementById("knownH").value;
+      d.grade=document.getElementById("grade").value;
+      d.routeKm=document.getElementById("routeKm").value;
     }
     try{ localStorage.setItem(STORE,JSON.stringify(store)); }catch(e){}
   },300);
 }
-function applyProject(id){
-  store.currentId=id;
-  const p=store.projects[id];
-  rows=p.rows||blankRows();
-  document.getElementById("site").value=p.name||"";
-  document.getElementById("knownH").value=p.knownH||"";
-  document.getElementById("grade").value=p.grade||"10";
-  document.getElementById("routeKm").value=p.routeKm||"";
+function applyDate(){
+  const d=curDate();
+  rows=d.rows||blankRows();
+  document.getElementById("site").value=curProj().name||"";
+  document.getElementById("knownH").value=d.knownH||"";
+  document.getElementById("grade").value=d.grade||"10";
+  document.getElementById("routeKm").value=d.routeKm||"";
+  document.getElementById("printDate").textContent=fmtDate(d.date);
   render(); calc();
+}
+function fmtDate(s){
+  if(!s) return "(日付なし)";
+  const[y,m,dd]=s.split("-");
+  return `${y}/${Number(m)}/${Number(dd)}`;
 }
 function renderProjSel(){
   const sel=document.getElementById("projSel");
   sel.innerHTML=Object.entries(store.projects)
     .map(([id,p])=>`<option value="${id}" ${id===store.currentId?"selected":""}>${(p.name||"(無題)").replace(/</g,"&lt;")}</option>`).join("");
+  renderDateSel();
 }
-function switchProject(id){ saveStore(); applyProject(id); renderProjSel(); saveStore(); }
+function renderDateSel(){
+  const p=curProj();
+  const sel=document.getElementById("dateSel");
+  sel.innerHTML=Object.entries(p.dates)
+    .sort((a,b)=> (b[1].date||"").localeCompare(a[1].date||""))
+    .map(([id,d])=>`<option value="${id}" ${id===p.currentDateId?"selected":""}>${fmtDate(d.date)}</option>`).join("");
+}
+function switchProject(id){ store.currentId=id; applyDate(); renderProjSel(); saveStore(); }
+function switchDate(id){ curProj().currentDateId=id; applyDate(); renderDateSel(); saveStore(); }
 function openNewDlg(){
   document.getElementById("newName").value="工事"+(Object.keys(store.projects).length+1);
   document.getElementById("newDlg").classList.add("show");
@@ -347,27 +418,58 @@ function openNewDlg(){
 function confirmNew(){
   const name=document.getElementById("newName").value.trim()||"(無題)";
   const id="p"+Date.now();
-  store.projects[id]={name:name,rows:blankRows(),knownH:"",grade:"10",routeKm:""};
+  store.projects[id]=blankProject(name);
+  store.currentId=id;
   closeDlg("newDlg");
-  applyProject(id); renderProjSel(); saveStore();
+  applyDate(); renderProjSel(); saveStore();
 }
 function openDelDlg(){
-  const p=store.projects[store.currentId];
-  document.getElementById("delMsg").textContent=`「${p.name||"(無題)"}」のデータを削除します。この操作は元に戻せません。`;
+  const p=curProj();
+  document.getElementById("delMsg").textContent=`「${p.name||"(無題)"}」の全データ(すべての日付を含む)を削除します。この操作は元に戻せません。`;
   document.getElementById("delDlg").classList.add("show");
 }
 function confirmDel(){
   delete store.projects[store.currentId];
   if(Object.keys(store.projects).length===0){
     const id="p"+Date.now();
-    store.projects[id]={name:"工事1",rows:blankRows(),knownH:"",grade:"10",routeKm:""};
+    store.projects[id]=blankProject("工事1");
   }
+  store.currentId=Object.keys(store.projects)[0];
   closeDlg("delDlg");
-  applyProject(Object.keys(store.projects)[0]); renderProjSel(); saveStore();
+  applyDate(); renderProjSel(); saveStore();
+}
+function openNewDateDlg(){
+  document.getElementById("newDate").value=today();
+  document.getElementById("newDateDlg").classList.add("show");
+}
+function confirmNewDate(){
+  const p=curProj();
+  const dateStr=document.getElementById("newDate").value||today();
+  const did="d"+Date.now();
+  p.dates[did]=blankDate(dateStr);
+  p.currentDateId=did;
+  closeDlg("newDateDlg");
+  applyDate(); renderDateSel(); saveStore();
+}
+function openDelDateDlg(){
+  const d=curDate();
+  document.getElementById("delDateMsg").textContent=`「${curProj().name}」の ${fmtDate(d.date)} のデータを削除します。この操作は元に戻せません。`;
+  document.getElementById("delDateDlg").classList.add("show");
+}
+function confirmDelDate(){
+  const p=curProj();
+  delete p.dates[p.currentDateId];
+  if(Object.keys(p.dates).length===0){
+    const did="d"+Date.now();
+    p.dates[did]=blankDate();
+  }
+  p.currentDateId=Object.keys(p.dates)[0];
+  closeDlg("delDateDlg");
+  applyDate(); renderDateSel(); saveStore();
 }
 function closeDlg(id){ document.getElementById(id).classList.remove("show"); }
 function renameProject(name){
-  const p=store.projects[store.currentId];
+  const p=curProj();
   if(p){ p.name=name; renderProjSel(); saveStore(); }
 }
 
@@ -515,7 +617,7 @@ function currentIHBefore(i){
 }
 
 loadStore();
-applyProject(store.currentId);
+applyDate();
 renderProjSel();
 </script>
 </body>

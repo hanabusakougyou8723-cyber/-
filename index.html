@@ -75,7 +75,7 @@ header input::placeholder{color:rgba(255,255,255,.6)}
 
 /* ===== 野帳テーブル ===== */
 .tablewrap{overflow-x:auto;background:var(--paper);-webkit-overflow-scrolling:touch}
-table{border-collapse:collapse;width:100%;min-width:760px}
+table{border-collapse:collapse;width:100%;min-width:582px}
 th{
   background:var(--head);border:1px solid var(--line);
   padding:6px 2px;font-size:16px;font-weight:700;line-height:1.2;
@@ -84,7 +84,7 @@ th small{display:block;font-size:11px;font-weight:600;color:#444}
 th.plan-th{background:#D9E4D0}
 td{
   border:1px solid var(--line);height:52px;padding:0;
-  font-family:var(--mono);font-size:17px;
+  font-family:var(--mono);font-size:15px;
 }
 td.rownum{
   background:var(--rownum);text-align:center;font-family:inherit;
@@ -120,13 +120,14 @@ tr.selrow td.rownum{background:#F6C6C0 !important}
 .selbar .pbtn.seldel{background:#C0392B;border-color:#C0392B;color:#fff}
 td input{
   width:100%;height:52px;border:none;background:transparent;
-  font-family:var(--mono);font-size:17px;text-align:right;padding:0 6px;color:var(--ink);
+  font-family:var(--mono);font-size:15px;text-align:right;padding:0 4px;color:var(--ink);
 }
 td input:focus{outline:none;background:#FFF9DE}
-td.calc{color:var(--calc);text-align:right;padding:0 6px;font-weight:500}
+td.calc{color:var(--calc);text-align:right;padding:0 4px;font-weight:500}
 td.reading{background:#F3FBF1;font-weight:700}
 col.c-pt{width:64px}
-col.c-num{width:98px}
+col.c-num{width:74px}
+col.c-read{width:74px}
 
 .toolbar{
   padding:10px 12px;display:flex;gap:8px;align-items:center;background:#F2F2EE;
@@ -296,7 +297,7 @@ td.adjv{font-weight:700}
     <table>
       <colgroup>
         <col class="c-pt"><col class="c-num"><col class="c-num"><col class="c-num">
-        <col class="c-num"><col class="c-num"><col class="c-num"><col class="c-num">
+        <col class="c-num"><col class="c-num"><col class="c-read"><col class="c-num">
       </colgroup>
       <thead>
         <tr>

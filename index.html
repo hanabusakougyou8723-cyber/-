@@ -112,6 +112,14 @@ tr.selrow td.rownum{background:#F6C6C0 !important}
 .selbar .pbtn{background:#fff}
 .selbar .pbtn.selins{background:#fff;border-color:#fff;color:var(--green-d)}
 .selbar .pbtn.seldel{background:#C0392B;border-color:#C0392B;color:#fff}
+.snack{
+  display:none;position:fixed;left:12px;right:12px;bottom:14px;z-index:70;
+  background:#333;border-radius:12px;padding:10px 12px;
+  gap:10px;align-items:center;box-shadow:0 4px 14px rgba(0,0,0,.35);
+}
+.snack.show{display:flex}
+.snackmsg{flex:1;color:#fff;font-size:14px}
+.snack .pbtn.undo{background:#FFD54F;border-color:#FFD54F;color:#333}
 td input{
   width:100%;height:56px;border:none;background:transparent;
   font-family:var(--mono);font-size:15px;text-align:right;padding:0 4px;color:var(--ink);
@@ -174,7 +182,7 @@ td.adjv{font-weight:700}
   header h1{color:#000;font-size:18px}
   header input{background:transparent;color:#000;border:none;font-size:15px}
   header input::placeholder{color:transparent}
-  .tabs,.toolbar,.btn,.projbar,.ovl,.insbtn,.selbar{display:none !important}
+  .tabs,.toolbar,.btn,.projbar,.ovl,.insbtn,.selbar,.snack{display:none !important}
   .panel{display:block !important}
   .tablewrap{overflow:visible}
   table{min-width:0;width:100%}
@@ -208,8 +216,9 @@ td.adjv{font-weight:700}
 </div>
 <div class="projbar datebar">
   <span class="plabel">日付</span>
-  <select id="dateSel" onchange="switchDate(this.value)"></select>
+  <select id="dateSel" onchange="switchDate(this.value)" ontouchstart="datePress()" ontouchend="datePressEnd(event)" ontouchmove="datePressCancel()" oncontextmenu="openCopyDateDlg();return false"></select>
   <button class="pbtn" onclick="openNewDateDlg()">＋追加</button>
+  <button class="pbtn" onclick="openEditDateDlg()">変更</button>
   <button class="pbtn danger" onclick="openDelDateDlg()">削除</button>
 </div>
 
@@ -242,9 +251,37 @@ td.adjv{font-weight:700}
   <div class="dlg">
     <h3>日付を追加</h3>
     <input type="date" id="newDate">
+    <input type="text" id="newDateMemo" placeholder="メモ(任意・例:A工区 布設)">
     <div class="dlg-btns">
       <button class="pbtn" onclick="closeDlg('newDateDlg')">キャンセル</button>
       <button class="pbtn primary" onclick="confirmNewDate()">追加</button>
+    </div>
+  </div>
+</div>
+
+<!-- 日付変更ダイアログ -->
+<div class="ovl" id="editDateDlg">
+  <div class="dlg">
+    <h3>日付・メモの変更</h3>
+    <input type="date" id="editDate">
+    <input type="text" id="editDateMemo" placeholder="メモ(任意)">
+    <div class="dlg-btns">
+      <button class="pbtn" onclick="closeDlg('editDateDlg')">キャンセル</button>
+      <button class="pbtn primary" onclick="confirmEditDate()">変更する</button>
+    </div>
+  </div>
+</div>
+
+<!-- 日付複製ダイアログ -->
+<div class="ovl" id="copyDateDlg">
+  <div class="dlg">
+    <h3>日付データの複製</h3>
+    <p id="copySrcMsg" style="font-size:13px;line-height:1.7;color:#444;margin-bottom:10px"></p>
+    <input type="date" id="copyDate">
+    <input type="text" id="copyDateMemo" placeholder="メモ(任意)">
+    <div class="dlg-btns">
+      <button class="pbtn" onclick="closeDlg('copyDateDlg')">キャンセル</button>
+      <button class="pbtn primary" onclick="confirmCopyDate()">複製する</button>
     </div>
   </div>
 </div>
@@ -281,6 +318,12 @@ td.adjv{font-weight:700}
   <button class="pbtn seldel" onclick="openDelSelDlg()">削除</button>
 </div>
 
+<!-- 元に戻すバー -->
+<div class="snack" id="snack">
+  <span id="snackMsg" class="snackmsg"></span>
+  <button class="pbtn undo" onclick="undo()">元に戻す</button>
+</div>
+
 <div class="tabs">
   <button id="t0" class="on" onclick="tab(0)">野 帳</button>
   <button id="t1" onclick="tab(1)">誤差補正</button>
@@ -311,6 +354,7 @@ td.adjv{font-weight:700}
   </div>
   <div class="toolbar">
     <span class="unit">単位:メートル(m) ／ 測点1のGHに基準標高を入力</span>
+    <button class="btn" onclick="undo()">↩ 戻る</button>
     <button class="btn" onclick="addRows(5)">＋5行</button>
     <button class="btn" onclick="window.print()">PDF出力</button>
   </div>
@@ -430,7 +474,7 @@ function applyDate(){
   document.getElementById("knownH").value=d.knownH||"";
   document.getElementById("grade").value=d.grade||"10";
   document.getElementById("routeKm").value=d.routeKm||"";
-  document.getElementById("printDate").textContent=fmtDate(d.date);
+  document.getElementById("printDate").textContent=fmtDate(d.date)+(d.memo?(" "+d.memo):"");
   render(); calc();
 }
 function fmtDate(s){
@@ -449,7 +493,7 @@ function renderDateSel(){
   const sel=document.getElementById("dateSel");
   sel.innerHTML=Object.entries(p.dates)
     .sort((a,b)=> (b[1].date||"").localeCompare(a[1].date||""))
-    .map(([id,d])=>`<option value="${id}" ${id===p.currentDateId?"selected":""}>${fmtDate(d.date)}</option>`).join("");
+    .map(([id,d])=>`<option value="${id}" ${id===p.currentDateId?"selected":""}>${fmtDate(d.date)}${d.memo?(" "+d.memo.replace(/</g,"&lt;")):""}</option>`).join("");
 }
 function switchProject(id){ store.currentId=id; applyDate(); renderProjSel(); saveStore(); }
 function switchDate(id){ curProj().currentDateId=id; applyDate(); renderDateSel(); saveStore(); }
@@ -471,6 +515,8 @@ function openDelDlg(){
   document.getElementById("delDlg").classList.add("show");
 }
 function confirmDel(){
+  pushUndo();
+  const delName=curProj().name||"(無題)";
   delete store.projects[store.currentId];
   if(Object.keys(store.projects).length===0){
     const id="p"+Date.now();
@@ -479,9 +525,11 @@ function confirmDel(){
   store.currentId=Object.keys(store.projects)[0];
   closeDlg("delDlg");
   applyDate(); renderProjSel(); saveStore();
+  showSnack("「"+delName+"」を削除しました");
 }
 function openNewDateDlg(){
   document.getElementById("newDate").value=today();
+  document.getElementById("newDateMemo").value="";
   document.getElementById("newDateDlg").classList.add("show");
 }
 function confirmNewDate(){
@@ -489,8 +537,59 @@ function confirmNewDate(){
   const dateStr=document.getElementById("newDate").value||today();
   const did="d"+Date.now();
   p.dates[did]=blankDate(dateStr);
+  p.dates[did].memo=document.getElementById("newDateMemo").value.trim();
   p.currentDateId=did;
   closeDlg("newDateDlg");
+  applyDate(); renderDateSel(); saveStore();
+}
+function openEditDateDlg(){
+  const d=curDate();
+  document.getElementById("editDate").value=d.date||today();
+  document.getElementById("editDateMemo").value=d.memo||"";
+  document.getElementById("editDateDlg").classList.add("show");
+}
+function confirmEditDate(){
+  const d=curDate();
+  d.date=document.getElementById("editDate").value||d.date;
+  d.memo=document.getElementById("editDateMemo").value.trim();
+  closeDlg("editDateDlg");
+  applyDate(); renderDateSel(); saveStore();
+}
+
+/* ===== 日付長押しで複製 ===== */
+let datePressTimer=null, dateLongFired=false;
+function datePress(){
+  datePressCancel();
+  dateLongFired=false;
+  datePressTimer=setTimeout(()=>{ dateLongFired=true; openCopyDateDlg(); },600);
+}
+function datePressCancel(){ clearTimeout(datePressTimer); }
+function datePressEnd(e){
+  datePressCancel();
+  if(dateLongFired){ e.preventDefault(); dateLongFired=false; }
+}
+function openCopyDateDlg(){
+  // 現在編集中の入力を確実に保存してから複製元にする
+  const d=curDate();
+  d.rows=rows;
+  d.knownH=document.getElementById("knownH").value;
+  d.grade=document.getElementById("grade").value;
+  d.routeKm=document.getElementById("routeKm").value;
+  document.getElementById("copySrcMsg").textContent=`「${fmtDate(d.date)}${d.memo?(" "+d.memo):""}」のデータをコピーして、選んだ日付に複製します。`;
+  document.getElementById("copyDate").value=today();
+  document.getElementById("copyDateMemo").value=d.memo||"";
+  document.getElementById("copyDateDlg").classList.add("show");
+}
+function confirmCopyDate(){
+  const p=curProj();
+  const src=curDate();
+  const did="d"+Date.now();
+  const copy=JSON.parse(JSON.stringify(src)); // 完全コピー
+  copy.date=document.getElementById("copyDate").value||today();
+  copy.memo=document.getElementById("copyDateMemo").value.trim();
+  p.dates[did]=copy;
+  p.currentDateId=did;
+  closeDlg("copyDateDlg");
   applyDate(); renderDateSel(); saveStore();
 }
 function openDelDateDlg(){
@@ -499,7 +598,9 @@ function openDelDateDlg(){
   document.getElementById("delDateDlg").classList.add("show");
 }
 function confirmDelDate(){
+  pushUndo();
   const p=curProj();
+  const delName=fmtDate(curDate().date);
   delete p.dates[p.currentDateId];
   if(Object.keys(p.dates).length===0){
     const did="d"+Date.now();
@@ -508,8 +609,62 @@ function confirmDelDate(){
   p.currentDateId=Object.keys(p.dates)[0];
   closeDlg("delDateDlg");
   applyDate(); renderDateSel(); saveStore();
+  showSnack(delName+" のデータを削除しました");
 }
 function closeDlg(id){ document.getElementById(id).classList.remove("show"); }
+
+/* ===== 元に戻す(削除の取り消し) ===== */
+let undoStack=[], snackTimer=null;
+function syncCur(){
+  const d=curDate();
+  if(d){
+    d.rows=rows;
+    d.knownH=document.getElementById("knownH").value;
+    d.grade=document.getElementById("grade").value;
+    d.routeKm=document.getElementById("routeKm").value;
+  }
+}
+function pushUndo(){
+  syncCur();
+  undoStack.push(JSON.stringify(store));
+  if(undoStack.length>20) undoStack.shift();
+}
+function showSnack(msg){
+  document.getElementById("snackMsg").textContent=msg;
+  document.getElementById("snack").classList.add("show");
+  clearTimeout(snackTimer);
+  snackTimer=setTimeout(hideSnack,8000);
+}
+function hideSnack(){ document.getElementById("snack").classList.remove("show"); }
+function undo(){
+  if(undoStack.length===0){ hideSnack(); showSnack("これ以上戻れません"); return; }
+  store=JSON.parse(undoStack.pop());
+  if(!store.projects[store.currentId]) store.currentId=Object.keys(store.projects)[0];
+  hideSnack();
+  applyDate(); renderProjSel(); saveStore();
+}
+
+/* ===== セル編集の取り消し記録 ===== */
+// 入力欄にカーソルが入った時点の状態を覚えておき、値が変わって離れたら履歴に積む
+let editSnap=null, editVal=null, editEl=null;
+document.addEventListener("focusin",e=>{
+  const t=e.target;
+  if(t.matches && t.matches("#tb input, #knownH, #routeKm")){
+    syncCur();
+    editSnap=JSON.stringify(store);
+    editVal=t.value;
+    editEl=t;
+  }
+});
+document.addEventListener("focusout",e=>{
+  if(e.target===editEl){
+    if(editSnap && e.target.value!==editVal){
+      undoStack.push(editSnap);
+      if(undoStack.length>20) undoStack.shift();
+    }
+    editSnap=null; editVal=null; editEl=null;
+  }
+});
 function renameProject(name){
   const p=curProj();
   if(p){ p.name=name; renderProjSel(); saveStore(); }
@@ -584,11 +739,14 @@ function openDelSelDlg(){
   document.getElementById("delRowDlg").classList.add("show");
 }
 function confirmDelRow(){
+  pushUndo();
+  const n=selected.size;
   [...selected].sort((a,b)=>b-a).forEach(i=>rows.splice(i,1));
   if(rows.length===0) rows=blankRows();
   closeDlg("delRowDlg");
   exitSel();
   render(); calc(); saveStore();
+  showSnack(n+"行を削除しました");
 }
 function num(v){ const n=parseFloat(v); return isNaN(n)?null:n; }
 function f3(v){ return v==null?"":v.toFixed(3); }

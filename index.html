@@ -370,7 +370,7 @@ td.adjv{font-weight:700}
 <script>
 const N_START = 15;
 // 各行: {name(測点名), bs, fs, gh0(1行目のみ手入力GH), plan}
-function blankRows(){ return Array.from({length:N_START},(_,i)=>({name:i===0?"KBM":"No."+i,bs:"",fs:"",gh0:"",plan:""})); }
+function blankRows(){ return Array.from({length:N_START},(_,i)=>({name:i===0?"KBM":"No."+(i-1),bs:"",fs:"",gh0:"",plan:""})); }
 let rows = blankRows();
 
 /* ===== 保存(工事→日付ごと) ===== */
@@ -398,10 +398,10 @@ function loadStore(){
     if(!p.currentDateId || !p.dates[p.currentDateId]){
       p.currentDateId=Object.keys(p.dates)[0];
     }
-    // 旧初期名(1,2,3...)をKBM/No.形式へ移行(手入力した名前は変更しない)
+    // 旧初期名をKBM/No.0形式へ移行(手入力した名前は変更しない)
     Object.values(p.dates).forEach(d=>{
       (d.rows||[]).forEach((r,i)=>{
-        if(r.name===String(i+1)){ r.name = i===0? "KBM" : "No."+i; }
+        if(r.name===String(i+1) || (i>0 && r.name==="No."+i)){ r.name = i===0? "KBM" : "No."+(i-1); }
       });
     });
   });
@@ -526,7 +526,7 @@ function tab(i){
   document.getElementById("p1").classList.toggle("on",i===1);
 }
 function addRows(n){
-  for(let k=0;k<n;k++) rows.push({name:"No."+rows.length,bs:"",fs:"",gh0:"",plan:""});
+  for(let k=0;k<n;k++) rows.push({name:"No."+(rows.length-1),bs:"",fs:"",gh0:"",plan:""});
   render(); calc(); saveStore();
 }
 function upd(i,k,v){ rows[i][k]=v; calc(); saveStore(); }

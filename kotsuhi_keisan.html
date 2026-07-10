@@ -1,0 +1,923 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>交通費精算書</title>
+<style>
+  :root{
+    --ink:#1c2733;
+    --form-blue:#2b4a7a;      /* 複写伝票のブルー */
+    --form-blue-lt:#e8eef7;
+    --line:#9db1c9;
+    --paper:#ffffff;
+    --desk:#eceff3;
+    --accent:#0e7a5f;         /* 合計・確定の緑 */
+    --danger:#b03030;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{background:var(--desk);color:var(--ink);
+    font-family:"Hiragino Kaku Gothic ProN","Yu Gothic","Meiryo",sans-serif;
+    font-size:14px;}
+
+  /* ===== ツールバー ===== */
+  .toolbar{
+    position:sticky;top:0;z-index:50;
+    display:flex;flex-wrap:wrap;gap:6px;align-items:center;
+    background:var(--form-blue);padding:8px 10px;
+    box-shadow:0 2px 6px rgba(0,0,0,.25);
+  }
+  .toolbar .title{color:#fff;font-weight:bold;letter-spacing:.15em;margin-right:auto;}
+  .btn{
+    border:none;border-radius:6px;padding:8px 14px;font-size:13px;
+    font-weight:bold;cursor:pointer;background:#fff;color:var(--form-blue);
+    -webkit-tap-highlight-color:transparent;
+  }
+  .btn:active{transform:translateY(1px);}
+  .btn.primary{background:#ffd34d;color:#4a3800;}
+  .btn.ghost{background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.5);}
+
+  /* ===== 用紙 ===== */
+  .sheet{
+    background:var(--paper);max-width:820px;margin:14px auto 90px;
+    padding:22px 20px 28px;box-shadow:0 1px 8px rgba(0,0,0,.15);
+  }
+  .sheet-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;}
+  h1{
+    font-size:22px;letter-spacing:.5em;text-indent:.5em;text-align:center;
+    border-bottom:3px double var(--ink);padding-bottom:6px;flex:1 1 100%;
+    margin-bottom:12px;
+  }
+
+  /* 承認印欄 */
+  .stamps{display:flex;border:1px solid var(--ink);}
+  .stamp{width:64px;text-align:center;border-left:1px solid var(--ink);}
+  .stamp:first-child{border-left:none;}
+  .stamp .lbl{font-size:11px;border-bottom:1px solid var(--ink);background:var(--form-blue-lt);padding:2px 0;}
+  .stamp .box{height:58px;}
+
+  /* 基本情報 */
+  .meta{flex:1 1 340px;display:grid;grid-template-columns:auto 1fr;gap:6px 8px;align-items:center;}
+  .meta label{font-size:12px;font-weight:bold;color:var(--form-blue);white-space:nowrap;}
+  .meta input{
+    width:100%;border:none;border-bottom:1px solid var(--line);
+    padding:5px 4px;font-size:15px;background:transparent;
+  }
+  .meta input:focus{outline:none;border-bottom:2px solid var(--form-blue);}
+
+  /* ===== 明細テーブル ===== */
+  .table-wrap{overflow-x:auto;margin-top:16px;}
+  table{border-collapse:collapse;width:100%;min-width:1050px;}
+  th,td{border:1px solid var(--line);padding:2px;}
+  th{
+    background:var(--form-blue-lt);color:var(--form-blue);
+    font-size:12px;padding:6px 2px;font-weight:bold;
+  }
+  td input,td select{
+    width:100%;border:none;background:transparent;padding:7px 5px;
+    font-size:14px;font-family:inherit;
+  }
+  td input:focus,td select:focus{outline:2px solid var(--form-blue);outline-offset:-2px;background:#fffbe8;}
+  td.num input{text-align:right;font-variant-numeric:tabular-nums;}
+  td.center{text-align:center;}
+  .kukan{display:flex;align-items:center;gap:2px;}
+  .kukan input{flex:1 1 0;min-width:60px;}
+  .kukan span{color:var(--line);font-size:12px;flex:0 0 auto;}
+  tr.selected td{background:#ffe3e3 !important;}
+  .rowbtn{
+    border:none;background:transparent;color:#7d92ab;cursor:pointer;
+    font-size:18px;padding:8px;min-width:32px;min-height:32px;
+    -webkit-tap-highlight-color:rgba(43,74,122,.2);
+  }
+  .rowbtn:hover{color:var(--form-blue);}
+  .amount-cell{font-variant-numeric:tabular-nums;text-align:right;padding:7px 6px !important;font-weight:bold;}
+
+  /* 印刷用テキストミラー（画面では非表示） */
+  .pv{display:none;}
+
+  /* 合計行 */
+  tfoot td{background:var(--form-blue-lt);font-weight:bold;padding:9px 6px;}
+  #grandTotal{color:var(--accent);font-size:18px;text-align:right;font-variant-numeric:tabular-nums;}
+
+  .note{margin-top:10px;font-size:12px;color:#667;}
+  .note b{color:var(--form-blue);}
+
+  .tokki-wrap{margin-top:14px;}
+  .tokki-label{font-size:12px;font-weight:bold;color:var(--form-blue);margin-bottom:4px;}
+  #mTokki{
+    width:100%;border:1px solid var(--line);border-radius:4px;
+    padding:8px;font-size:14px;font-family:inherit;line-height:1.6;resize:vertical;
+  }
+  #mTokki:focus{outline:2px solid var(--form-blue);outline-offset:-1px;}
+
+  /* ===== ダイアログ ===== */
+  dialog{
+    border:none;border-radius:10px;padding:0;max-width:92vw;width:360px;
+    box-shadow:0 8px 30px rgba(0,0,0,.35);
+  }
+  dialog::backdrop{background:rgba(20,30,45,.45);}
+  .dlg-head{background:var(--form-blue);color:#fff;font-weight:bold;padding:10px 14px;}
+  .dlg-body{padding:14px;display:flex;flex-direction:column;gap:10px;max-height:60vh;overflow-y:auto;}
+  .dlg-body input[type=text],.dlg-body input[type=number]{
+    width:100%;border:1px solid var(--line);border-radius:6px;padding:9px;font-size:15px;
+  }
+  .dlg-actions{display:flex;gap:8px;justify-content:flex-end;padding:0 14px 14px;}
+  .saved-item{
+    display:flex;align-items:center;gap:8px;border:1px solid var(--line);
+    border-radius:8px;padding:10px;cursor:pointer;
+  }
+  .saved-item:hover{background:var(--form-blue-lt);}
+  .saved-item .nm{flex:1;font-weight:bold;word-break:break-all;}
+  .saved-item .del{color:var(--danger);border:none;background:none;font-size:15px;cursor:pointer;padding:4px;}
+  .empty{color:#889;text-align:center;padding:12px 0;}
+
+  /* PDFプレビュー */
+  #dlgPdf{width:94vw;max-width:640px;}
+  .pdf-preview{
+    max-height:58vh;overflow-y:auto;border:1px solid var(--line);
+    border-radius:6px;background:#888;padding:8px;
+  }
+  .pdf-preview img{width:100%;display:block;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.4);}
+  .pdf-hint{font-size:12px;color:#667;line-height:1.6;}
+
+  /* ===== 複製カレンダー ===== */
+  .cal-nav{display:flex;align-items:center;justify-content:space-between;}
+  .cal-nav button{border:none;background:var(--form-blue-lt);color:var(--form-blue);
+    border-radius:6px;font-size:18px;padding:6px 14px;cursor:pointer;}
+  .cal-nav .ym{font-weight:bold;font-size:16px;}
+  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;}
+  .cal-grid .wd{text-align:center;font-size:11px;color:#667;padding:2px 0;}
+  .cal-grid .wd.sun{color:#c33;} .cal-grid .wd.sat{color:#36c;}
+  .cal-day{
+    aspect-ratio:1;border:1px solid var(--line);border-radius:6px;background:#fff;
+    font-size:14px;cursor:pointer;padding:0;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .cal-day:disabled{border:none;background:transparent;cursor:default;}
+  .cal-day.sel{background:var(--form-blue);color:#fff;border-color:var(--form-blue);font-weight:bold;}
+  .cal-count{font-size:12px;color:var(--form-blue);text-align:center;}
+
+  /* ===== PDF生成用（印刷体裁の再現） ===== */
+  body.printing .toolbar,body.printing .rowbtn,body.printing .note{display:none !important;}
+  body.printing .sheet{box-shadow:none;margin:0;padding:14px;max-width:none;width:1080px;}
+  body.printing th,body.printing td{border:1px solid #000;vertical-align:top;}
+  body.printing th{background:#eee !important;color:#000;}
+  body.printing tfoot td{background:#eee !important;}
+  body.printing #grandTotal{color:#000;}
+  body.printing .stamp .lbl{background:#eee !important;}
+  body.printing th.c-op,body.printing td.c-op{display:none !important;}
+  body.printing tbody td input[type=text]{display:none !important;}
+  body.printing tbody .kukan{display:none !important;}
+  body.printing tbody .pv{
+    display:block;white-space:pre-wrap;word-break:break-all;
+    font-size:12px;line-height:1.45;padding:4px 3px;min-height:1.4em;
+  }
+  body.printing td input,body.printing td select{font-size:12px;padding:3px;}
+  body.printing #mTokki{border:1px solid #000;border-radius:0;}
+  body.printing .table-wrap{overflow:visible;}
+  body.printing table{min-width:0;width:100%;}
+
+  /* ===== 印刷 ===== */
+  @media print{
+    @page{size:A4 portrait;margin:12mm;}
+    body{background:#fff;font-size:12px;}
+    .toolbar,.rowbtn,.no-print{display:none !important;}
+    .sheet{box-shadow:none;margin:0;padding:0;max-width:none;}
+    th,td{border:1px solid #000;}
+    th{background:#eee !important;color:#000;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    tfoot td{background:#eee !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    #grandTotal{color:#000;}
+    .stamp .lbl{background:#eee !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    .note{display:none;}
+    #mTokki{border:1px solid #000;border-radius:0;font-size:11px;}
+    .tokki-label{color:#000;}
+    td input,td select,.meta input{font-size:12px;padding:3px;}
+    /* 文字が切れないよう、テキスト系は入力欄を隠して全文ミラーを表示 */
+    tbody td input[type=text]{display:none !important;}
+    tbody .kukan{display:none !important;}
+    tbody .pv{
+      display:block;white-space:pre-wrap;word-break:break-all;
+      font-size:11px;line-height:1.45;padding:4px 3px;min-height:1.4em;
+    }
+    th,td{vertical-align:top;}
+    select{appearance:none;-webkit-appearance:none;}
+    tr{page-break-inside:avoid;}
+    .table-wrap{overflow:visible;}
+    table{min-width:0;}
+    col.c-op{width:0;display:none;}
+    th.c-op,td.c-op{display:none;}
+  }
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+  <span class="title">交通費計算</span>
+  <button class="btn" id="btnAddRow">＋行追加</button>
+  <button class="btn ghost" id="btnUnitPrice">単価設定</button>
+  <button class="btn ghost" id="btnSave">保存</button>
+  <button class="btn ghost" id="btnLoad">読込</button>
+  <button class="btn primary" id="btnPdf">📄 PDF保存</button>
+  <button class="btn ghost" id="btnPrint">🖨 印刷</button>
+</div>
+
+<div class="sheet">
+  <div class="sheet-head">
+    <h1>交通費精算書</h1>
+    <div class="meta">
+      <label>期　間</label><input type="text" id="mPeriod" placeholder="例：2026年7月分">
+      <label>所　属</label><input type="text" id="mDept" placeholder="部署・現場名など">
+      <label>氏　名</label><input type="text" id="mName" placeholder="氏名">
+    </div>
+    <div class="stamps">
+      <div class="stamp"><div class="lbl">承認</div><div class="box"></div></div>
+      <div class="stamp"><div class="lbl">確認</div><div class="box"></div></div>
+      <div class="stamp"><div class="lbl">申請</div><div class="box"></div></div>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table id="tbl">
+      <colgroup>
+        <col style="width:118px"><col style="width:150px"><col style="width:88px">
+        <col style="min-width:190px"><col style="width:56px"><col style="width:74px"><col style="width:90px">
+        <col style="width:170px">
+        <col class="c-op" style="width:112px">
+      </colgroup>
+      <thead>
+        <tr>
+          <th>日付</th><th>訪問先・目的</th><th>交通機関</th>
+          <th>区間（発 → 着）</th><th>往復</th><th>片道 / km</th><th>金額(円)</th>
+          <th>備考</th>
+          <th class="c-op">操作</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+      <tfoot>
+        <tr>
+          <td colspan="6" style="text-align:right;">合　計</td>
+          <td id="grandTotal">0</td>
+          <td></td>
+          <td class="c-op"></td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+
+  <div class="tokki-wrap">
+    <div class="tokki-label">特記事項（車2台の使用理由、タクシー利用の事情など）</div>
+    <textarea id="mTokki" rows="3" placeholder="例：同乗が困難な傷病のため、本人車両と付添者（妻）車両の2台で通院。事前に貴社担当者へ確認済み。"></textarea>
+  </div>
+
+  <p class="note">
+    交通機関で<b>「車」</b>を選ぶと「片道 / km」欄は<b>片道の走行距離(km)</b>として扱い、
+    <b>km単価 × 距離 ×（往復なら2）</b>で金額を自動計算します（単価は「単価設定」から変更。保険請求の一般基準は15円/km）。
+    その他は片道運賃を入力し、「往復」にチェックで2倍になります。金額欄を直接修正することも可能です。
+  </p>
+</div>
+
+<!-- 保存ダイアログ -->
+<dialog id="dlgSave">
+  <div class="dlg-head">名前を付けて保存</div>
+  <div class="dlg-body">
+    <input type="text" id="saveName" placeholder="例：2026年7月分（山田）">
+  </div>
+  <div class="dlg-actions">
+    <button class="btn ghost" style="color:var(--form-blue);border-color:var(--line);" data-close>キャンセル</button>
+    <button class="btn primary" id="btnSaveOk">保存する</button>
+  </div>
+</dialog>
+
+<!-- 読込ダイアログ -->
+<dialog id="dlgLoad">
+  <div class="dlg-head">保存データの読込</div>
+  <div class="dlg-body" id="savedList"></div>
+  <div class="dlg-actions">
+    <button class="btn ghost" style="color:var(--form-blue);border-color:var(--line);" data-close>閉じる</button>
+  </div>
+</dialog>
+
+<!-- 単価設定ダイアログ -->
+<dialog id="dlgUnit">
+  <div class="dlg-head">車のkm単価設定</div>
+  <div class="dlg-body">
+    <label style="font-size:13px;">1kmあたりの単価（円）</label>
+    <input type="number" id="unitPriceInput" min="0" step="0.1">
+  </div>
+  <div class="dlg-actions">
+    <button class="btn ghost" style="color:var(--form-blue);border-color:var(--line);" data-close>キャンセル</button>
+    <button class="btn primary" id="btnUnitOk">設定する</button>
+  </div>
+</dialog>
+
+<!-- 複製カレンダーダイアログ -->
+<dialog id="dlgDup">
+  <div class="dlg-head">行を複製：日付をタップして選択</div>
+  <div class="dlg-body">
+    <div class="cal-nav">
+      <button type="button" id="calPrev">◀</button>
+      <span class="ym" id="calYm"></span>
+      <button type="button" id="calNext">▶</button>
+    </div>
+    <div class="cal-grid" id="calGrid"></div>
+    <div class="cal-count" id="calCount">選択：0日</div>
+  </div>
+  <div class="dlg-actions">
+    <button class="btn ghost" style="color:var(--form-blue);border-color:var(--line);" data-close>キャンセル</button>
+    <button class="btn primary" id="btnDupOk">複製する</button>
+  </div>
+</dialog>
+
+<!-- PDFプレビューダイアログ -->
+<dialog id="dlgPdf">
+  <div class="dlg-head">PDFができました</div>
+  <div class="dlg-body">
+    <div class="pdf-preview" id="pdfPreview"></div>
+    <div class="pdf-hint" id="pdfHint">
+      「共有・印刷」→ 共有メニューの「プリント」で直接印刷できます。<br>
+      「ダウンロード」→ 端末に保存します（Android：ダウンロードフォルダ／iPhone：ファイルApp）。
+    </div>
+  </div>
+  <div class="dlg-actions">
+    <button class="btn ghost" style="color:var(--form-blue);border-color:var(--line);" id="btnPdfClose">閉じる</button>
+    <button class="btn ghost" style="color:var(--form-blue);border-color:var(--line);" id="btnPdfOpen">開く</button>
+    <button class="btn ghost" style="color:var(--form-blue);border-color:var(--line);" id="btnPdfDownload">ダウンロード</button>
+    <button class="btn primary" id="btnPdfShare">共有・印刷</button>
+  </div>
+</dialog>
+
+<!-- 印刷案内ダイアログ -->
+<dialog id="dlgPrint">
+  <div class="dlg-head">印刷について</div>
+  <div class="dlg-body">
+    <div style="line-height:1.7;font-size:13px;">
+      アプリモード（ホーム画面から起動）では、ブラウザの印刷機能が動作しない場合があります。<br><br>
+      その場合は<b>「📄 PDF保存」ボタン</b>をお使いください。精算書のPDFが作成され、
+      共有メニューから<b>そのままプリント</b>したり、PDFとして保存できます。
+    </div>
+  </div>
+  <div class="dlg-actions">
+    <button class="btn ghost" style="color:var(--form-blue);border-color:var(--line);" id="btnCopyUrl">URLをコピー</button>
+    <button class="btn ghost" style="color:var(--form-blue);border-color:var(--line);" id="btnTryPrint">印刷を試す</button>
+    <button class="btn primary" data-close>閉じる</button>
+  </div>
+</dialog>
+
+<!-- 汎用確認ダイアログ -->
+<dialog id="dlgConfirm">
+  <div class="dlg-head" id="confirmTitle">確認</div>
+  <div class="dlg-body"><div id="confirmMsg" style="line-height:1.6;"></div></div>
+  <div class="dlg-actions">
+    <button class="btn ghost" style="color:var(--form-blue);border-color:var(--line);" id="confirmNo">キャンセル</button>
+    <button class="btn primary" id="confirmYes">OK</button>
+  </div>
+</dialog>
+
+<script>
+"use strict";
+const LS_KEY  = "kotsuhi_sheets_v1";
+const LS_UNIT = "kotsuhi_unit_price_v1";
+const LS_CUR  = "kotsuhi_current_v1";
+
+let unitPrice = parseFloat(localStorage.getItem(LS_UNIT) || "15"); // 既定 15円/km
+
+const tbody = document.getElementById("tbody");
+const grandTotal = document.getElementById("grandTotal");
+
+const KIKAN = ["電車","バス","タクシー","車","高速代","駐車場","その他"];
+
+/* ===== カスタム確認ダイアログ（confirm/alertの代替） ===== */
+const dlgConfirm = document.getElementById("dlgConfirm");
+const confirmMsg = document.getElementById("confirmMsg");
+const confirmTitle = document.getElementById("confirmTitle");
+const confirmYes = document.getElementById("confirmYes");
+const confirmNo  = document.getElementById("confirmNo");
+let confirmResolve = null;
+
+function askConfirm(msg, title = "確認"){
+  return new Promise(resolve=>{
+    confirmResolve = resolve;
+    confirmTitle.textContent = title;
+    confirmMsg.textContent = msg;
+    confirmNo.style.display = "";
+    dlgConfirm.showModal();
+  });
+}
+function showAlert(msg, title = "お知らせ"){
+  return new Promise(resolve=>{
+    confirmResolve = resolve;
+    confirmTitle.textContent = title;
+    confirmMsg.textContent = msg;
+    confirmNo.style.display = "none"; // OKのみ
+    dlgConfirm.showModal();
+  });
+}
+confirmYes.addEventListener("click", ()=>{
+  dlgConfirm.close();
+  if (confirmResolve){ confirmResolve(true); confirmResolve = null; }
+});
+confirmNo.addEventListener("click", ()=>{
+  dlgConfirm.close();
+  if (confirmResolve){ confirmResolve(false); confirmResolve = null; }
+});
+dlgConfirm.addEventListener("cancel", ()=>{
+  if (confirmResolve){ confirmResolve(false); confirmResolve = null; }
+});
+
+/* ===== 行生成 ===== */
+function makeRow(data = {}){
+  const tr = document.createElement("tr");
+
+  // 日付
+  const tdDate = document.createElement("td");
+  const inDate = document.createElement("input");
+  inDate.type = "date";
+  inDate.value = data.date || "";
+  tdDate.appendChild(inDate);
+
+  // 訪問先・目的
+  const tdDest = document.createElement("td");
+  const inDest = document.createElement("input");
+  inDest.type = "text"; inDest.value = data.dest || "";
+  const pvDest = document.createElement("span"); pvDest.className = "pv";
+  tdDest.append(inDest, pvDest);
+
+  // 交通機関
+  const tdKikan = document.createElement("td");
+  const sel = document.createElement("select");
+  KIKAN.forEach(k=>{
+    const o = document.createElement("option");
+    o.value = o.textContent = k;
+    sel.appendChild(o);
+  });
+  sel.value = data.kikan || "電車";
+  tdKikan.appendChild(sel);
+
+  // 区間
+  const tdKukan = document.createElement("td");
+  const wrap = document.createElement("div"); wrap.className = "kukan";
+  const inFrom = document.createElement("input");
+  inFrom.type="text"; inFrom.placeholder="発"; inFrom.value = data.from || "";
+  const arrow = document.createElement("span"); arrow.textContent = "→";
+  const inTo = document.createElement("input");
+  inTo.type="text"; inTo.placeholder="着"; inTo.value = data.to || "";
+  wrap.append(inFrom, arrow, inTo);
+  const pvKukan = document.createElement("span"); pvKukan.className = "pv";
+  tdKukan.append(wrap, pvKukan);
+
+  // 往復
+  const tdRt = document.createElement("td"); tdRt.className = "center";
+  const chk = document.createElement("input");
+  chk.type = "checkbox"; chk.style.width = "20px"; chk.style.height = "20px";
+  chk.checked = !!data.roundtrip;
+  tdRt.appendChild(chk);
+
+  // 片道 / km
+  const tdBase = document.createElement("td"); tdBase.className = "num";
+  const inBase = document.createElement("input");
+  inBase.type = "number"; inBase.min = "0"; inBase.inputMode = "decimal";
+  inBase.value = (data.base ?? "") === "" ? "" : data.base;
+  tdBase.appendChild(inBase);
+
+  // 金額
+  const tdAmt = document.createElement("td"); tdAmt.className = "num";
+  const inAmt = document.createElement("input");
+  inAmt.type = "number"; inAmt.min = "0"; inAmt.inputMode = "numeric";
+  inAmt.className = "amount";
+  inAmt.value = (data.amount ?? "") === "" ? "" : data.amount;
+  inAmt.dataset.manual = data.manual ? "1" : "";
+  tdAmt.appendChild(inAmt);
+
+  // 備考
+  const tdBiko = document.createElement("td");
+  const inBiko = document.createElement("input");
+  inBiko.type = "text"; inBiko.placeholder = "";
+  inBiko.value = data.biko || "";
+  const pvBiko = document.createElement("span"); pvBiko.className = "pv";
+  tdBiko.append(inBiko, pvBiko);
+
+  // 操作
+  const tdOp = document.createElement("td");
+  tdOp.className = "center c-op";
+  const bDup = document.createElement("button");
+  bDup.className = "rowbtn"; bDup.title = "この行を複製（日付をカレンダーで選択）"; bDup.textContent = "⧉";
+  const bIns = document.createElement("button");
+  bIns.className = "rowbtn"; bIns.title = "この上に行を挿入"; bIns.textContent = "⤴";
+  const bDel = document.createElement("button");
+  bDel.className = "rowbtn"; bDel.title = "行を削除"; bDel.textContent = "✕";
+  tdOp.append(bDup, bIns, bDel);
+
+  tr.append(tdDate, tdDest, tdKikan, tdKukan, tdRt, tdBase, tdAmt, tdBiko, tdOp);
+
+  /* 自動計算 */
+  function recalcRow(){
+    if (inAmt.dataset.manual === "1") { calcTotal(); persistCurrent(); return; }
+    const base = parseFloat(inBase.value);
+    if (isNaN(base)) { inAmt.value = ""; calcTotal(); persistCurrent(); return; }
+    let amt;
+    if (sel.value === "車") {
+      amt = base * unitPrice * (chk.checked ? 2 : 1); // 片道km × 単価 ×(往復2)
+    } else {
+      amt = base * (chk.checked ? 2 : 1);   // 片道 × 往復
+    }
+    inAmt.value = Math.round(amt);
+    calcTotal(); persistCurrent();
+  }
+  inBase.addEventListener("input", ()=>{ inAmt.dataset.manual=""; recalcRow(); });
+  sel.addEventListener("change", ()=>{ inAmt.dataset.manual=""; recalcRow(); });
+  chk.addEventListener("change", ()=>{ inAmt.dataset.manual=""; recalcRow(); });
+  inAmt.addEventListener("input", ()=>{ inAmt.dataset.manual="1"; calcTotal(); persistCurrent(); });
+  /* 印刷用ミラー同期 */
+  function syncPv(){
+    pvDest.textContent  = inDest.value;
+    pvKukan.textContent = (inFrom.value || inTo.value) ? `${inFrom.value} → ${inTo.value}` : "";
+    pvBiko.textContent  = inBiko.value;
+  }
+  syncPv();
+  [inDate,inDest,inFrom,inTo,inBiko].forEach(el=>el.addEventListener("input", ()=>{ syncPv(); persistCurrent(); }));
+
+  bDel.addEventListener("click", async ()=>{
+    if (await askConfirm("この行を削除しますか？", "行の削除")) {
+      tr.remove(); calcTotal(); persistCurrent();
+    }
+  });
+  bIns.addEventListener("click", ()=>{
+    tbody.insertBefore(makeRow(), tr); persistCurrent();
+  });
+  bDup.addEventListener("click", ()=>openDupCalendar(tr));
+
+  return tr;
+}
+
+function addRow(data){ tbody.appendChild(makeRow(data)); }
+
+/* ===== 合計 ===== */
+function calcTotal(){
+  let sum = 0;
+  tbody.querySelectorAll("input.amount").forEach(i=>{
+    const v = parseFloat(i.value);
+    if (!isNaN(v)) sum += v;
+  });
+  grandTotal.textContent = sum.toLocaleString("ja-JP");
+}
+
+/* ===== シリアライズ ===== */
+function collect(){
+  const rows = [];
+  tbody.querySelectorAll("tr").forEach(tr=>rows.push(rowData(tr)));
+  return {
+    period: mPeriod.value, dept: mDept.value, name: mName.value,
+    tokki: document.getElementById("mTokki").value, rows
+  };
+}
+function restore(d){
+  mPeriod.value = d.period || "";
+  mDept.value   = d.dept || "";
+  mName.value   = d.name || "";
+  document.getElementById("mTokki").value = d.tokki || "";
+  tbody.innerHTML = "";
+  (d.rows && d.rows.length ? d.rows : [{}]).forEach(r=>addRow(r));
+  calcTotal();
+}
+
+/* ===== 行データ読取り ===== */
+function rowData(tr){
+  const ins = tr.querySelectorAll("input");
+  const sel = tr.querySelector("select");
+  return {
+    date: ins[0].value, dest: ins[1].value, kikan: sel.value,
+    from: ins[2].value, to: ins[3].value,
+    roundtrip: ins[4].checked,
+    base: ins[5].value, amount: ins[6].value,
+    manual: ins[6].dataset.manual === "1",
+    biko: ins[7].value
+  };
+}
+
+/* ===== 複製カレンダー ===== */
+const dlgDup   = document.getElementById("dlgDup");
+const calGrid  = document.getElementById("calGrid");
+const calYm    = document.getElementById("calYm");
+const calCount = document.getElementById("calCount");
+let calYear, calMonth;              // 表示中の年月（monthは0始まり）
+let calSelected = new Set();        // "YYYY-MM-DD"
+let dupSourceTr = null;
+
+function pad2(n){ return String(n).padStart(2,"0"); }
+
+function openDupCalendar(tr){
+  dupSourceTr = tr;
+  calSelected = new Set();
+  const d = rowData(tr).date ? new Date(rowData(tr).date + "T00:00:00") : new Date();
+  calYear = d.getFullYear(); calMonth = d.getMonth();
+  renderCal();
+  dlgDup.showModal();
+}
+
+function renderCal(){
+  calYm.textContent = `${calYear}年 ${calMonth+1}月`;
+  calGrid.innerHTML = "";
+  ["日","月","火","水","木","金","土"].forEach((w,i)=>{
+    const el = document.createElement("div");
+    el.className = "wd" + (i===0 ? " sun" : i===6 ? " sat" : "");
+    el.textContent = w;
+    calGrid.appendChild(el);
+  });
+  const first = new Date(calYear, calMonth, 1).getDay();
+  const days  = new Date(calYear, calMonth+1, 0).getDate();
+  for (let i=0;i<first;i++){
+    const b = document.createElement("button");
+    b.type="button"; b.className="cal-day"; b.disabled = true;
+    calGrid.appendChild(b);
+  }
+  for (let d=1;d<=days;d++){
+    const key = `${calYear}-${pad2(calMonth+1)}-${pad2(d)}`;
+    const b = document.createElement("button");
+    b.type="button"; b.className = "cal-day" + (calSelected.has(key) ? " sel" : "");
+    b.textContent = d;
+    b.addEventListener("click", ()=>{
+      calSelected.has(key) ? calSelected.delete(key) : calSelected.add(key);
+      b.classList.toggle("sel");
+      calCount.textContent = `選択：${calSelected.size}日`;
+    });
+    calGrid.appendChild(b);
+  }
+  calCount.textContent = `選択：${calSelected.size}日`;
+}
+document.getElementById("calPrev").addEventListener("click", ()=>{
+  calMonth--; if (calMonth < 0){ calMonth = 11; calYear--; } renderCal();
+});
+document.getElementById("calNext").addEventListener("click", ()=>{
+  calMonth++; if (calMonth > 11){ calMonth = 0; calYear++; } renderCal();
+});
+document.getElementById("btnDupOk").addEventListener("click", async ()=>{
+  if (!dupSourceTr) { dlgDup.close(); return; }
+  if (!calSelected.size) { await showAlert("複製先の日付をタップして選択してください"); return; }
+  const src = rowData(dupSourceTr);
+  let anchor = dupSourceTr;
+  [...calSelected].sort().forEach(date=>{
+    const newTr = makeRow({ ...src, date });
+    tbody.insertBefore(newTr, anchor.nextSibling);
+    anchor = newTr;
+  });
+  calcTotal(); persistCurrent();
+  dlgDup.close();
+});
+
+/* ===== 現在編集中データの自動保持 ===== */
+function persistCurrent(){
+  localStorage.setItem(LS_CUR, JSON.stringify(collect()));
+}
+const mPeriod = document.getElementById("mPeriod");
+const mDept   = document.getElementById("mDept");
+const mName   = document.getElementById("mName");
+[mPeriod,mDept,mName,document.getElementById("mTokki")].forEach(el=>el.addEventListener("input", persistCurrent));
+
+/* ===== 保存 / 読込 ===== */
+function getSheets(){ try{ return JSON.parse(localStorage.getItem(LS_KEY)) || {}; }catch(e){ return {}; } }
+function setSheets(s){ localStorage.setItem(LS_KEY, JSON.stringify(s)); }
+
+const dlgSave = document.getElementById("dlgSave");
+const dlgLoad = document.getElementById("dlgLoad");
+const dlgUnit = document.getElementById("dlgUnit");
+document.querySelectorAll("[data-close]").forEach(b=>{
+  b.addEventListener("click", ()=>b.closest("dialog").close());
+});
+
+document.getElementById("btnSave").addEventListener("click", ()=>{
+  const def = [mPeriod.value, mName.value].filter(Boolean).join("（") + (mName.value ? "）" : "");
+  document.getElementById("saveName").value = def;
+  dlgSave.showModal();
+});
+document.getElementById("btnSaveOk").addEventListener("click", async ()=>{
+  const name = document.getElementById("saveName").value.trim();
+  if (!name) { await showAlert("保存名を入力してください"); return; }
+  const sheets = getSheets();
+  if (sheets[name] && !(await askConfirm(`「${name}」は既に存在します。上書きしますか？`, "上書き確認"))) return;
+  sheets[name] = { savedAt: new Date().toISOString(), data: collect() };
+  setSheets(sheets);
+  dlgSave.close();
+});
+
+document.getElementById("btnLoad").addEventListener("click", ()=>{
+  const list = document.getElementById("savedList");
+  list.innerHTML = "";
+  const sheets = getSheets();
+  const names = Object.keys(sheets).sort((a,b)=>(sheets[b].savedAt||"").localeCompare(sheets[a].savedAt||""));
+  if (!names.length){
+    list.innerHTML = '<div class="empty">保存データはありません</div>';
+  }
+  names.forEach(n=>{
+    const item = document.createElement("div"); item.className = "saved-item";
+    const nm = document.createElement("span"); nm.className = "nm"; nm.textContent = n;
+    const dt = document.createElement("span");
+    dt.style.cssText = "font-size:11px;color:#889;";
+    dt.textContent = (sheets[n].savedAt||"").slice(0,10);
+    const del = document.createElement("button"); del.className = "del"; del.textContent = "🗑";
+    del.title = "削除";
+    del.addEventListener("click", async (e)=>{
+      e.stopPropagation();
+      if (!(await askConfirm(`「${n}」を削除しますか？この操作は元に戻せません。`, "保存データの削除"))) return;
+      const s = getSheets(); delete s[n]; setSheets(s);
+      item.remove();
+      if (!Object.keys(getSheets()).length) list.innerHTML = '<div class="empty">保存データはありません</div>';
+    });
+    item.append(nm, dt, del);
+    item.addEventListener("click", ()=>{
+      restore(sheets[n].data);
+      persistCurrent();
+      dlgLoad.close();
+    });
+    list.appendChild(item);
+  });
+  dlgLoad.showModal();
+});
+
+/* ===== 単価設定 ===== */
+document.getElementById("btnUnitPrice").addEventListener("click", ()=>{
+  document.getElementById("unitPriceInput").value = unitPrice;
+  dlgUnit.showModal();
+});
+document.getElementById("btnUnitOk").addEventListener("click", async ()=>{
+  const v = parseFloat(document.getElementById("unitPriceInput").value);
+  if (isNaN(v) || v < 0) { await showAlert("正しい数値を入力してください"); return; }
+  unitPrice = v;
+  localStorage.setItem(LS_UNIT, String(v));
+  // 車の行を再計算（手動修正済みは除く）
+  tbody.querySelectorAll("tr").forEach(tr=>{
+    const sel = tr.querySelector("select");
+    const ins = tr.querySelectorAll("input");
+    const amt = ins[6];
+    if (sel.value === "車" && amt.dataset.manual !== "1") {
+      const base = parseFloat(ins[5].value);
+      amt.value = isNaN(base) ? "" : Math.round(base * unitPrice);
+    }
+  });
+  calcTotal(); persistCurrent();
+  dlgUnit.close();
+});
+
+/* ===== その他ボタン ===== */
+/* ===== PDF生成 ===== */
+function loadScript(src){
+  return new Promise((res, rej)=>{
+    const s = document.createElement("script");
+    s.src = src; s.onload = res; s.onerror = ()=>rej(new Error("load failed: " + src));
+    document.head.appendChild(s);
+  });
+}
+async function ensurePdfLibs(){
+  if (!window.html2canvas)
+    await loadScript("https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js");
+  if (!window.jspdf)
+    await loadScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js");
+}
+
+const btnPdf = document.getElementById("btnPdf");
+let pdfResult = null;
+
+document.getElementById("btnPdfClose").addEventListener("click", ()=>{
+  document.getElementById("dlgPdf").close();
+  document.getElementById("pdfPreview").innerHTML = "";
+  pdfResult = null;
+});
+document.getElementById("btnPdfShare").addEventListener("click", async ()=>{
+  if (!pdfResult) return;
+  const file = new File([pdfResult.blob], pdfResult.fname, { type: "application/pdf" });
+  try {
+    await navigator.share({ files: [file], title: pdfResult.fname });
+  } catch(e) {
+    if (e && e.name === "AbortError") return; // キャンセルは無視
+    await showAlert("共有できませんでした。「ダウンロード」をお試しください。");
+  }
+});
+document.getElementById("btnPdfOpen").addEventListener("click", async ()=>{
+  if (!pdfResult) return;
+  const url = URL.createObjectURL(pdfResult.blob);
+  const w = window.open(url, "_blank");
+  if (!w) {
+    URL.revokeObjectURL(url);
+    await showAlert("PDFを開けませんでした。ポップアップがブロックされている可能性があります。「ダウンロード」または「共有・印刷」をお試しください。");
+    return;
+  }
+  setTimeout(()=>URL.revokeObjectURL(url), 60000);
+});
+document.getElementById("btnPdfDownload").addEventListener("click", async ()=>{
+  if (!pdfResult) return;
+  const url = URL.createObjectURL(pdfResult.blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = pdfResult.fname;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 30000);
+  await showAlert(
+    "「" + pdfResult.fname + "」の保存を開始しました。\n\n" +
+    "Android：通知バー、または「Files/ファイル」アプリの「ダウンロード」フォルダを確認してください。\n" +
+    "iPhone：「ファイル」App内に保存されます。",
+    "保存先について"
+  );
+});
+
+btnPdf.addEventListener("click", async ()=>{
+  const orig = btnPdf.textContent;
+  btnPdf.textContent = "作成中…"; btnPdf.disabled = true;
+  try {
+    await ensurePdfLibs();
+
+    document.body.classList.add("printing");
+    await new Promise(r=>setTimeout(r, 80)); // レイアウト反映待ち
+    const canvas = await html2canvas(document.querySelector(".sheet"), {
+      scale: 2, backgroundColor: "#ffffff"
+    });
+    document.body.classList.remove("printing");
+
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF("p", "mm", "a4");
+    const margin = 8;
+    const imgW = 210 - margin * 2;                 // mm
+    const pxPerMm = canvas.width / imgW;
+    const pageHpx = Math.floor((297 - margin * 2) * pxPerMm);
+
+    let y = 0, page = 0;
+    while (y < canvas.height) {
+      const sliceH = Math.min(pageHpx, canvas.height - y);
+      const tmp = document.createElement("canvas");
+      tmp.width = canvas.width; tmp.height = sliceH;
+      tmp.getContext("2d").drawImage(canvas, 0, y, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
+      if (page > 0) pdf.addPage();
+      pdf.addImage(tmp.toDataURL("image/jpeg", 0.95), "JPEG",
+                   margin, margin, imgW, sliceH / pxPerMm);
+      y += sliceH; page++;
+    }
+
+    const fname = ((mPeriod.value || "交通費精算書") + (mName.value ? "_" + mName.value : "")) + ".pdf";
+    const blob = pdf.output("blob");
+
+    // プレビューを表示（できたことが目で確認できる）
+    pdfResult = { blob, fname };
+    const preview = document.getElementById("pdfPreview");
+    preview.innerHTML = "";
+    const img = document.createElement("img");
+    img.src = canvas.toDataURL("image/jpeg", 0.8);
+    preview.appendChild(img);
+    // 共有が使えない環境ではボタンを隠す
+    const testFile = new File([blob], fname, { type: "application/pdf" });
+    document.getElementById("btnPdfShare").style.display =
+      (navigator.canShare && navigator.canShare({ files: [testFile] })) ? "" : "none";
+    document.getElementById("dlgPdf").showModal();
+  } catch(e) {
+    document.body.classList.remove("printing");
+    if (e && e.name === "AbortError") {
+      // 共有シートをキャンセルしただけ。何もしない
+    } else if (String(e).includes("load failed")) {
+      await showAlert("PDF作成用の部品を読み込めませんでした。通信状態を確認してもう一度お試しください。");
+    } else {
+      await showAlert("PDFの作成に失敗しました。もう一度お試しください。\n" + e);
+    }
+  } finally {
+    btnPdf.textContent = orig; btnPdf.disabled = false;
+  }
+});
+
+/* ===== 印刷 ===== */
+const dlgPrint = document.getElementById("dlgPrint");
+function isStandalone(){
+  return window.matchMedia("(display-mode: standalone)").matches
+      || window.navigator.standalone === true;
+}
+document.getElementById("btnPrint").addEventListener("click", ()=>{
+  if (isStandalone()) {
+    // PWA/アプリモードでは window.print が無視されることが多いため案内を表示
+    dlgPrint.showModal();
+  } else {
+    try { window.print(); }
+    catch(e){ dlgPrint.showModal(); }
+  }
+});
+document.getElementById("btnTryPrint").addEventListener("click", ()=>{
+  try { window.print(); } catch(e){}
+});
+document.getElementById("btnCopyUrl").addEventListener("click", async ()=>{
+  const url = location.href;
+  try {
+    await navigator.clipboard.writeText(url);
+    await showAlert("URLをコピーしました。ブラウザのアドレスバーに貼り付けて開いてください。");
+  } catch(e) {
+    await showAlert("コピーできませんでした。アドレスバーのURLを直接コピーしてください。\n" + url);
+  }
+});
+
+document.getElementById("btnAddRow").addEventListener("click", ()=>{ addRow(); persistCurrent(); });
+
+/* ===== 起動 ===== */
+(function init(){
+  let cur = null;
+  try{ cur = JSON.parse(localStorage.getItem(LS_CUR)); }catch(e){}
+  if (cur) { restore(cur); }
+  else { for(let i=0;i<5;i++) addRow(); }
+  calcTotal();
+})();
+</script>
+</body>
+</html>

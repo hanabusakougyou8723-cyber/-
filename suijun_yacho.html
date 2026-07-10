@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>野帳 ─ 水準測量</title>
+<style>
+:root{
+  --green:#6B9E6F;
+  --green-d:#5A8C5E;
+  --head:#E4D5B5;      /* 列見出しのベージュ */
+  --rownum:#E7F0E4;    /* 測点列の薄緑 */
+  --calc:#A020F0;      /* 計算値の紫 */
+  --ink:#222;
+  --line:#555;
+  --paper:#fff;
+  --mono:"SF Mono","Roboto Mono",Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{
+  font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;
+  background:#F2F2EE;color:var(--ink);font-size:15px;padding-bottom:110px;
+}
+header{
+  background:var(--green);color:#fff;padding:14px 14px;
+  display:flex;align-items:center;gap:12px;
+  position:sticky;top:0;z-index:30;
+}
+header h1{font-size:22px;font-weight:700;letter-spacing:.4em;flex-shrink:0}
+header input{
+  flex:1;border:none;background:rgba(255,255,255,.15);border-radius:8px;
+  color:#fff;font-size:17px;padding:8px 10px;min-width:0;
+}
+header input::placeholder{color:rgba(255,255,255,.6)}
+.tabs{display:flex;background:var(--green-d);position:sticky;top:58px;z-index:29}
+.tabs button{
+  flex:1;padding:11px 0;border:none;background:transparent;color:rgba(255,255,255,.65);
+  font-size:14px;font-weight:700;letter-spacing:.1em;border-bottom:3px solid transparent;
+}
+.tabs button.on{color:#fff;border-bottom-color:#fff}
+.panel{display:none}.panel.on{display:block}
+
+/* ===== 野帳テーブル ===== */
+.tablewrap{overflow-x:auto;background:var(--paper);-webkit-overflow-scrolling:touch}
+table{border-collapse:collapse;width:100%;min-width:660px}
+th{
+  background:var(--head);border:1px solid var(--line);
+  padding:6px 2px;font-size:16px;font-weight:700;line-height:1.2;
+}
+th small{display:block;font-size:11px;font-weight:600;color:#444}
+th.plan-th{background:#D9E4D0}
+td{
+  border:1px solid var(--line);height:52px;padding:0;
+  font-family:var(--mono);font-size:17px;
+}
+td.rownum{
+  background:var(--rownum);text-align:center;font-family:inherit;
+  font-size:17px;min-width:46px;width:46px;
+  position:sticky;left:0;z-index:2;border-right:2px solid var(--line);
+}
+td input{
+  width:100%;height:52px;border:none;background:transparent;
+  font-family:var(--mono);font-size:17px;text-align:right;padding:0 6px;color:var(--ink);
+}
+td input:focus{outline:none;background:#FFF9DE}
+td.calc{color:var(--calc);text-align:right;padding:0 6px;font-weight:500}
+td.reading{background:#F3FBF1;font-weight:700}
+col.c-pt{width:46px}
+col.c-num{width:98px}
+
+.toolbar{
+  padding:10px 12px;display:flex;gap:8px;align-items:center;background:#F2F2EE;
+}
+.toolbar .unit{font-size:13px;color:#555;flex:1}
+.btn{
+  padding:10px 16px;border:1.5px solid var(--green-d);border-radius:10px;
+  background:#fff;color:var(--green-d);font-size:14px;font-weight:700;
+}
+.checksum{
+  margin:0 12px 12px;padding:10px 12px;background:#fff;border:1px solid #CCC;
+  border-radius:10px;font-family:var(--mono);font-size:13px;color:#555;line-height:1.9;
+}
+.checksum b{color:var(--ink)}
+
+/* ===== 誤差補正 ===== */
+main.pad{padding:12px;max-width:640px;margin:0 auto}
+.sec{background:#fff;border:1px solid #CCC;border-radius:12px;padding:14px 12px;margin-bottom:12px}
+.sec h2{
+  font-size:13px;letter-spacing:.2em;color:var(--green-d);
+  border-left:4px solid var(--green);padding-left:8px;margin-bottom:12px;
+}
+.fld label{display:block;font-size:12px;color:#666;margin-bottom:4px}
+.fld input,.fld select{
+  width:100%;padding:10px 8px;border:1px solid #BBB;border-radius:8px;font-size:16px;background:#fff;
+}
+.fld input{font-family:var(--mono);text-align:right}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+.kv{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px dotted #CCC;font-size:14px}
+.kv:last-child{border-bottom:none}
+.kv .v{font-family:var(--mono);font-size:17px;font-weight:700}
+.badge{padding:4px 14px;border-radius:20px;font-size:13px;font-weight:700;color:#fff}
+.badge.ok{background:#2E8B57}.badge.ng{background:#C0392B}.badge.na{background:#999}
+table.corr{min-width:0;width:100%}
+table.corr th{font-size:12px;padding:7px 4px}
+table.corr td{height:auto;padding:8px 6px;text-align:right;font-size:14px}
+table.corr td:first-child{text-align:center;font-family:inherit}
+td.minus{color:#C0392B}
+td.adjv{font-weight:700}
+.note{font-size:12px;color:#666;line-height:1.7;margin-top:10px}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>野帳</h1>
+  <input type="text" id="site" placeholder="現場名(例:下水道)">
+</header>
+
+<div class="tabs">
+  <button id="t0" class="on" onclick="tab(0)">野 帳</button>
+  <button id="t1" onclick="tab(1)">誤差補正</button>
+</div>
+
+<!-- ===== 野帳 ===== -->
+<div class="panel on" id="p0">
+  <div class="tablewrap">
+    <table>
+      <colgroup>
+        <col class="c-pt"><col class="c-num"><col class="c-num"><col class="c-num">
+        <col class="c-num"><col class="c-num"><col class="c-num">
+      </colgroup>
+      <thead>
+        <tr>
+          <th>測点</th>
+          <th>BS<small>後 視</small></th>
+          <th>IH<small>器械高</small></th>
+          <th>FS<small>前 視</small></th>
+          <th>GH<small>地盤高</small></th>
+          <th class="plan-th">計画高<small>入 力</small></th>
+          <th class="plan-th">読み<small>IH−計画高</small></th>
+        </tr>
+      </thead>
+      <tbody id="tb"></tbody>
+    </table>
+  </div>
+  <div class="toolbar">
+    <span class="unit">単位:メートル(m) ／ 測点1のGHに基準標高を入力</span>
+    <button class="btn" onclick="addRows(5)">＋5行</button>
+  </div>
+  <div class="checksum" id="checksum"></div>
+</div>
+
+<!-- ===== 誤差補正 ===== -->
+<div class="panel" id="p1">
+<main class="pad">
+  <div class="sec">
+    <h2>閉合差の計算</h2>
+    <div class="fld" style="margin-bottom:10px">
+      <label>到着点(検証点)の既知標高 m</label>
+      <input type="number" inputmode="decimal" step="0.001" id="knownH" placeholder="0.000" oninput="calc()">
+    </div>
+    <div class="kv"><span>観測による最終地盤高</span><span class="v" id="lastGH">─</span></div>
+    <div class="kv"><span>閉合差 E</span><span class="v" id="closure">─</span></div>
+  </div>
+
+  <div class="sec">
+    <h2>許容誤差の判定(公共測量)</h2>
+    <div class="row2">
+      <div class="fld">
+        <label>等級</label>
+        <select id="grade" onchange="calc()">
+          <option value="2.5">1級 (2.5mm√S)</option>
+          <option value="5">2級 (5mm√S)</option>
+          <option value="10" selected>3級 (10mm√S)</option>
+          <option value="20">4級 (20mm√S)</option>
+          <option value="40">簡易 (40mm√S)</option>
+        </select>
+      </div>
+      <div class="fld">
+        <label>路線長 S (km・片道)</label>
+        <input type="number" inputmode="decimal" step="0.01" id="routeKm" placeholder="0.50" oninput="calc()">
+      </div>
+    </div>
+    <div class="kv"><span>許容誤差</span><span class="v" id="tolerance">─</span></div>
+    <div class="kv"><span>判定</span><span id="verdict" class="badge na">未入力</span></div>
+  </div>
+
+  <div class="sec">
+    <h2>補正の配分(測点数に比例)</h2>
+    <table class="corr">
+      <thead><tr><th>測点</th><th>地盤高</th><th>補正量</th><th>補正後標高</th></tr></thead>
+      <tbody id="corrBody"></tbody>
+    </table>
+    <div class="note">補正量 = −E × (測点順の累計 ÷ 合計)。閉合差を各測点へ均等に配分します。</div>
+  </div>
+</main>
+</div>
+
+<script>
+const N_START = 15;
+// 各行: {bs, fs, gh0(1行目のみ手入力GH), plan}
+let rows = Array.from({length:N_START},()=>({bs:"",fs:"",gh0:"",plan:""}));
+
+function tab(i){
+  document.getElementById("t0").classList.toggle("on",i===0);
+  document.getElementById("t1").classList.toggle("on",i===1);
+  document.getElementById("p0").classList.toggle("on",i===0);
+  document.getElementById("p1").classList.toggle("on",i===1);
+}
+function addRows(n){
+  for(let k=0;k<n;k++) rows.push({bs:"",fs:"",gh0:"",plan:""});
+  render(); calc();
+}
+function upd(i,k,v){ rows[i][k]=v; calc(); }
+function num(v){ const n=parseFloat(v); return isNaN(n)?null:n; }
+function f3(v){ return v==null?"":v.toFixed(3); }
+
+function render(){
+  const tb=document.getElementById("tb");
+  tb.innerHTML=rows.map((r,i)=>`
+    <tr>
+      <td class="rownum">${i+1}</td>
+      <td><input type="number" inputmode="decimal" step="0.001" value="${r.bs}" oninput="upd(${i},'bs',this.value)"></td>
+      <td class="calc" id="ih${i}"></td>
+      <td>${i===0?"":`<input type="number" inputmode="decimal" step="0.001" value="${r.fs}" oninput="upd(${i},'fs',this.value)">`}</td>
+      <td>${i===0
+        ?`<input type="number" inputmode="decimal" step="0.001" value="${r.gh0}" placeholder="基準標高" oninput="upd(${i},'gh0',this.value)" style="color:var(--ink)">`
+        :`<span class="calc" style="display:block;text-align:right;padding:0 6px" id="gh${i}"></span>`}</td>
+      <td><input type="number" inputmode="decimal" step="0.001" value="${r.plan}" oninput="upd(${i},'plan',this.value)"></td>
+      <td class="calc reading" id="rd${i}"></td>
+    </tr>`).join("");
+}
+
+let ghArr=[], ihShown=[];
+function calc(){
+  let IH=null, sumBS=0, sumFS=0;
+  ghArr=[]; ihShown=[];
+  rows.forEach((r,i)=>{
+    const bs=num(r.bs), fs=num(r.fs);
+    let g=null, ihCell=null;
+
+    if(i===0){
+      g=num(r.gh0);
+      if(g!=null && bs!=null){ IH=g+bs; sumBS+=bs; ihCell=IH; }
+    }else{
+      if(IH!=null && fs!=null){ g=IH-fs; sumFS+=fs; }
+      // この測点での読みは現在のIHで計算 → その後もりかえ
+      if(g!=null && bs!=null){ IH=g+bs; sumBS+=bs; ihCell=IH; } // もりかえ点はIH表示
+    }
+    ghArr[i]=g; ihShown[i]= (i===0? ihCell : (ihCell!=null? ihCell : null));
+
+    // 表示更新
+    const ihEl=document.getElementById("ih"+i);
+    if(ihEl) ihEl.textContent = ihShown[i]!=null? f3(ihShown[i]) : "";
+    if(i>0){
+      const ghEl=document.getElementById("gh"+i);
+      if(ghEl) ghEl.textContent = f3(g);
+    }
+    const rdEl=document.getElementById("rd"+i);
+    if(rdEl){
+      const plan=num(r.plan);
+      // 読みは「その測点を視準している時のIH」= もりかえ前のIH
+      let ihForRead = (i===0)? ihShown[0] : (function(){
+        // i行を視準しているIH = i行のGH計算に使ったIH
+        return (g!=null && num(r.fs)!=null)? g+num(r.fs) : (i===0? ihShown[0]: currentIHBefore(i));
+      })();
+      if(i===0) ihForRead=ihShown[0];
+      rdEl.textContent = (plan!=null && ihForRead!=null)? f3(ihForRead-plan) : "";
+    }
+  });
+
+  // 検算
+  const g0=num(rows[0].gh0);
+  const lastIdx=(()=>{for(let i=rows.length-1;i>=0;i--){if(ghArr[i]!=null)return i;}return -1;})();
+  const last=lastIdx>=0?ghArr[lastIdx]:null;
+  const cs=document.getElementById("checksum");
+  if(g0!=null && last!=null && lastIdx>0){
+    const d1=sumBS-sumFS, d2=last-g0;
+    cs.innerHTML=`検算 ΣBS−ΣFS = <b>${d1.toFixed(3)}</b> ／ 最終GH−起点GH = <b>${d2.toFixed(3)}</b> ${Math.abs(d1-d2)<0.0005?"✔ 一致":"✖ 不一致"}`;
+  }else{
+    cs.textContent="測点1にBSと基準標高(GH)、以降の測点にFSを入力すると自動計算します。もりかえ点は同じ行にFSとBSを両方入力してください。";
+  }
+
+  // ===== 誤差補正 =====
+  document.getElementById("lastGH").textContent = last!=null? last.toFixed(3)+" m":"─";
+  const known=num(document.getElementById("knownH").value);
+  let E=null;
+  if(known!=null && last!=null) E=last-known;
+  document.getElementById("closure").textContent = E!=null? (E>=0?"+":"")+(E*1000).toFixed(1)+" mm":"─";
+
+  const k=parseFloat(document.getElementById("grade").value);
+  const S=num(document.getElementById("routeKm").value);
+  const tolEl=document.getElementById("tolerance"), vEl=document.getElementById("verdict");
+  if(S!=null && S>0){
+    const tol=k*Math.sqrt(S);
+    tolEl.textContent="±"+tol.toFixed(1)+" mm";
+    if(E!=null){
+      const ok=Math.abs(E*1000)<=tol;
+      vEl.textContent=ok?"合格":"不合格(再測)";
+      vEl.className="badge "+(ok?"ok":"ng");
+    }else{vEl.textContent="閉合差未算出";vEl.className="badge na";}
+  }else{tolEl.textContent="─";vEl.textContent="未入力";vEl.className="badge na";}
+
+  const body=document.getElementById("corrBody");
+  if(E==null){
+    body.innerHTML=`<tr><td colspan="4" style="text-align:center;color:#888">既知標高を入力すると補正計算します</td></tr>`;
+    return;
+  }
+  const idx=[]; // GHが計算された測点(起点除く)
+  for(let i=1;i<rows.length;i++){ if(ghArr[i]!=null) idx.push(i); }
+  const total=idx.length;
+  let html=`<tr><td>1</td><td>${f3(ghArr[0])}</td><td>±0.0mm</td><td class="adjv">${f3(ghArr[0])}</td></tr>`;
+  idx.forEach((i,j)=>{
+    const corr=-E*((j+1)/total);
+    const adj=ghArr[i]+corr;
+    html+=`<tr><td>${i+1}</td><td>${f3(ghArr[i])}</td><td class="minus">${(corr*1000>=0?"+":"")+(corr*1000).toFixed(1)}mm</td><td class="adjv">${adj.toFixed(3)}</td></tr>`;
+  });
+  body.innerHTML=html;
+}
+
+// i行を視準している時点のIH(もりかえを順に再生)
+function currentIHBefore(i){
+  let IH=null;
+  const g0=num(rows[0].gh0), bs0=num(rows[0].bs);
+  if(g0!=null && bs0!=null) IH=g0+bs0;
+  for(let j=1;j<i;j++){
+    const fs=num(rows[j].fs), bs=num(rows[j].bs);
+    if(IH!=null && fs!=null && bs!=null){ IH=(IH-fs)+bs; }
+  }
+  return IH;
+}
+
+render(); calc();
+</script>
+</body>
+</html>

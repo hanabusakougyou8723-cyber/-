@@ -602,13 +602,13 @@ function render(){
       </td>
       <td><input type="number" inputmode="decimal" step="0.001" value="${r.bs}" oninput="upd(${i},'bs',this.value)"></td>
       <td class="calc" id="ih${i}"></td>
-      <td>${i===0?"":`<input type="number" inputmode="decimal" step="0.001" value="${r.fs}" data-col="fs" data-row="${i}" enterkeyhint="next" onkeydown="nextCell(event,${i},'fs')" oninput="upd(${i},'fs',this.value)">`}</td>
+      <td>${i===0?"":`<input type="number" inputmode="decimal" step="0.001" value="${r.fs}" data-col="fs" data-row="${i}" enterkeyhint="next" onkeydown="nextCell(event,${i},'fs')" oninput="updMove(${i},'fs',this)">`}</td>
       <td>${i===0
         ?`<input type="number" inputmode="decimal" step="0.001" value="${r.gh0}" placeholder="基準標高" oninput="upd(${i},'gh0',this.value)" style="color:var(--ink)">`
         :`<span class="calc" style="display:block;text-align:right;padding:0 6px" id="gh${i}"></span>`}</td>
       <td>${i===0
         ?`<span style="display:block;text-align:center;color:#BBB">─</span>`
-        :`<input type="number" inputmode="decimal" step="0.001" value="${r.plan}" data-col="plan" data-row="${i}" enterkeyhint="next" onkeydown="nextCell(event,${i},'plan')" oninput="upd(${i},'plan',this.value)">`}</td>
+        :`<input type="number" inputmode="decimal" step="0.001" value="${r.plan}" data-col="plan" data-row="${i}" enterkeyhint="next" onkeydown="nextCell(event,${i},'plan')" oninput="updMove(${i},'plan',this)">`}</td>
       <td class="calc reading" id="rd${i}"></td>
       <td class="calc" id="df${i}"></td>
     </tr>`).join("");
@@ -616,13 +616,23 @@ function render(){
 
 // Enter(次へ)キーで同じ列の下のセルへ移動
 function nextCell(e,i,col){
-  if(e.key!=="Enter") return;
+  if(e.key!=="Enter" && e.keyCode!==13) return;
   e.preventDefault();
+  focusNext(i,col);
+}
+// 下の同じ列のセルへフォーカス移動
+function focusNext(i,col){
   for(let j=i+1;j<rows.length;j++){
     const el=document.querySelector(`input[data-col="${col}"][data-row="${j}"]`);
     if(el){ el.focus(); el.select&&el.select(); return; }
   }
-  e.target.blur(); // 最終行なら閉じる
+  const cur=document.querySelector(`input[data-col="${col}"][data-row="${i}"]`);
+  if(cur) cur.blur(); // 最終行なら閉じる
+}
+// 入力+小数3桁そろったら自動で下へ
+function updMove(i,col,el){
+  upd(i,col,el.value);
+  if(/\.\d{3}$/.test(el.value)){ focusNext(i,col); }
 }
 
 let ghArr=[], ihShown=[];

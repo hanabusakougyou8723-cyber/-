@@ -32,6 +32,37 @@ header input{
   color:#fff;font-size:17px;padding:8px 10px;min-width:0;
 }
 header input::placeholder{color:rgba(255,255,255,.6)}
+.projbar{
+  background:#EFF3EC;border-bottom:1px solid #CCC;
+  padding:8px 12px;display:flex;gap:8px;align-items:center;
+}
+.projbar select{
+  flex:1;min-width:0;padding:9px 8px;border:1px solid #BBB;border-radius:8px;
+  font-size:15px;background:#fff;
+}
+.pbtn{
+  padding:9px 12px;border:1.5px solid var(--green-d);border-radius:8px;
+  background:#fff;color:var(--green-d);font-size:13px;font-weight:700;flex-shrink:0;
+}
+.pbtn.danger{border-color:#C0392B;color:#C0392B}
+.pbtn.primary{background:var(--green-d);color:#fff}
+.ovl{
+  display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);
+  z-index:100;align-items:center;justify-content:center;padding:20px;
+}
+.ovl.show{display:flex}
+.dlg{
+  background:#fff;border-radius:14px;padding:18px 16px;width:100%;max-width:340px;
+  box-shadow:0 8px 30px rgba(0,0,0,.3);
+}
+.dlg h3{font-size:16px;margin-bottom:12px;color:var(--green-d)}
+.dlg input{
+  width:100%;padding:11px 10px;border:1px solid #BBB;border-radius:8px;font-size:16px;
+  margin-bottom:14px;
+}
+.dlg-btns{display:flex;gap:8px;justify-content:flex-end;margin-top:6px}
+.dlg-btns .pbtn{padding:11px 18px}
+.dlg-btns .pbtn.danger{background:#C0392B;color:#fff}
 .tabs{display:flex;background:var(--green-d);position:sticky;top:58px;z-index:29}
 .tabs button{
   flex:1;padding:11px 0;border:none;background:transparent;color:rgba(255,255,255,.65);
@@ -122,7 +153,7 @@ td.adjv{font-weight:700}
   header h1{color:#000;font-size:18px}
   header input{background:transparent;color:#000;border:none;font-size:15px}
   header input::placeholder{color:transparent}
-  .tabs,.toolbar,.btn{display:none !important}
+  .tabs,.toolbar,.btn,.projbar,.ovl{display:none !important}
   .panel{display:block !important}
   .tablewrap{overflow:visible}
   table{min-width:0;width:100%}
@@ -144,8 +175,38 @@ td.adjv{font-weight:700}
 
 <header>
   <h1>野帳</h1>
-  <input type="text" id="site" placeholder="現場名(例:下水道)">
+  <input type="text" id="site" placeholder="工事名(例:下水道)" oninput="renameProject(this.value)">
 </header>
+
+<div class="projbar">
+  <select id="projSel" onchange="switchProject(this.value)"></select>
+  <button class="pbtn" onclick="openNewDlg()">＋新規</button>
+  <button class="pbtn danger" onclick="openDelDlg()">削除</button>
+</div>
+
+<!-- 新規工事ダイアログ -->
+<div class="ovl" id="newDlg">
+  <div class="dlg">
+    <h3>新しい工事を作成</h3>
+    <input type="text" id="newName" placeholder="工事名を入力">
+    <div class="dlg-btns">
+      <button class="pbtn" onclick="closeDlg('newDlg')">キャンセル</button>
+      <button class="pbtn primary" onclick="confirmNew()">作成</button>
+    </div>
+  </div>
+</div>
+
+<!-- 削除確認ダイアログ -->
+<div class="ovl" id="delDlg">
+  <div class="dlg">
+    <h3>工事データの削除</h3>
+    <p id="delMsg" style="font-size:14px;line-height:1.7;color:#444"></p>
+    <div class="dlg-btns">
+      <button class="pbtn" onclick="closeDlg('delDlg')">キャンセル</button>
+      <button class="pbtn danger" onclick="confirmDel()">削除する</button>
+    </div>
+  </div>
+</div>
 
 <div class="tabs">
   <button id="t0" class="on" onclick="tab(0)">野 帳</button>
@@ -190,7 +251,7 @@ td.adjv{font-weight:700}
     <h2>閉合差の計算</h2>
     <div class="fld" style="margin-bottom:10px">
       <label>到着点(検証点)の既知標高 m</label>
-      <input type="number" inputmode="decimal" step="0.001" id="knownH" placeholder="0.000" oninput="calc()">
+      <input type="number" inputmode="decimal" step="0.001" id="knownH" placeholder="0.000" oninput="calc();saveStore()">
     </div>
     <div class="kv"><span>観測による最終地盤高</span><span class="v" id="lastGH">─</span></div>
     <div class="kv"><span>閉合差 E</span><span class="v" id="closure">─</span></div>
@@ -201,7 +262,7 @@ td.adjv{font-weight:700}
     <div class="row2">
       <div class="fld">
         <label>等級</label>
-        <select id="grade" onchange="calc()">
+        <select id="grade" onchange="calc();saveStore()">
           <option value="2.5">1級 (2.5mm√S)</option>
           <option value="5">2級 (5mm√S)</option>
           <option value="10" selected>3級 (10mm√S)</option>
@@ -211,7 +272,7 @@ td.adjv{font-weight:700}
       </div>
       <div class="fld">
         <label>路線長 S (km・片道)</label>
-        <input type="number" inputmode="decimal" step="0.01" id="routeKm" placeholder="0.50" oninput="calc()">
+        <input type="number" inputmode="decimal" step="0.01" id="routeKm" placeholder="0.50" oninput="calc();saveStore()">
       </div>
     </div>
     <div class="kv"><span>許容誤差</span><span class="v" id="tolerance">─</span></div>
@@ -232,7 +293,83 @@ td.adjv{font-weight:700}
 <script>
 const N_START = 15;
 // 各行: {name(測点名), bs, fs, gh0(1行目のみ手入力GH), plan}
-let rows = Array.from({length:N_START},(_,i)=>({name:String(i+1),bs:"",fs:"",gh0:"",plan:""}));
+function blankRows(){ return Array.from({length:N_START},(_,i)=>({name:String(i+1),bs:"",fs:"",gh0:"",plan:""})); }
+let rows = blankRows();
+
+/* ===== 保存(工事ごと) ===== */
+const STORE="yacho_store_v1";
+let store={projects:{},currentId:null};
+function loadStore(){
+  try{
+    const s=localStorage.getItem(STORE);
+    if(s){ store=JSON.parse(s); }
+  }catch(e){}
+  if(!store.currentId || !store.projects[store.currentId]){
+    const id="p"+Date.now();
+    store.projects[id]={name:"工事1",rows:blankRows(),knownH:"",grade:"10",routeKm:""};
+    store.currentId=id;
+  }
+}
+let saveTimer=null;
+function saveStore(){
+  clearTimeout(saveTimer);
+  saveTimer=setTimeout(()=>{
+    const p=store.projects[store.currentId];
+    if(p){
+      p.rows=rows;
+      p.knownH=document.getElementById("knownH").value;
+      p.grade=document.getElementById("grade").value;
+      p.routeKm=document.getElementById("routeKm").value;
+    }
+    try{ localStorage.setItem(STORE,JSON.stringify(store)); }catch(e){}
+  },300);
+}
+function applyProject(id){
+  store.currentId=id;
+  const p=store.projects[id];
+  rows=p.rows||blankRows();
+  document.getElementById("site").value=p.name||"";
+  document.getElementById("knownH").value=p.knownH||"";
+  document.getElementById("grade").value=p.grade||"10";
+  document.getElementById("routeKm").value=p.routeKm||"";
+  render(); calc();
+}
+function renderProjSel(){
+  const sel=document.getElementById("projSel");
+  sel.innerHTML=Object.entries(store.projects)
+    .map(([id,p])=>`<option value="${id}" ${id===store.currentId?"selected":""}>${(p.name||"(無題)").replace(/</g,"&lt;")}</option>`).join("");
+}
+function switchProject(id){ saveStore(); applyProject(id); renderProjSel(); saveStore(); }
+function openNewDlg(){
+  document.getElementById("newName").value="工事"+(Object.keys(store.projects).length+1);
+  document.getElementById("newDlg").classList.add("show");
+}
+function confirmNew(){
+  const name=document.getElementById("newName").value.trim()||"(無題)";
+  const id="p"+Date.now();
+  store.projects[id]={name:name,rows:blankRows(),knownH:"",grade:"10",routeKm:""};
+  closeDlg("newDlg");
+  applyProject(id); renderProjSel(); saveStore();
+}
+function openDelDlg(){
+  const p=store.projects[store.currentId];
+  document.getElementById("delMsg").textContent=`「${p.name||"(無題)"}」のデータを削除します。この操作は元に戻せません。`;
+  document.getElementById("delDlg").classList.add("show");
+}
+function confirmDel(){
+  delete store.projects[store.currentId];
+  if(Object.keys(store.projects).length===0){
+    const id="p"+Date.now();
+    store.projects[id]={name:"工事1",rows:blankRows(),knownH:"",grade:"10",routeKm:""};
+  }
+  closeDlg("delDlg");
+  applyProject(Object.keys(store.projects)[0]); renderProjSel(); saveStore();
+}
+function closeDlg(id){ document.getElementById(id).classList.remove("show"); }
+function renameProject(name){
+  const p=store.projects[store.currentId];
+  if(p){ p.name=name; renderProjSel(); saveStore(); }
+}
 
 function tab(i){
   document.getElementById("t0").classList.toggle("on",i===0);
@@ -242,9 +379,9 @@ function tab(i){
 }
 function addRows(n){
   for(let k=0;k<n;k++) rows.push({name:String(rows.length+1),bs:"",fs:"",gh0:"",plan:""});
-  render(); calc();
+  render(); calc(); saveStore();
 }
-function upd(i,k,v){ rows[i][k]=v; calc(); }
+function upd(i,k,v){ rows[i][k]=v; calc(); saveStore(); }
 function num(v){ const n=parseFloat(v); return isNaN(n)?null:n; }
 function f3(v){ return v==null?"":v.toFixed(3); }
 
@@ -377,7 +514,9 @@ function currentIHBefore(i){
   return IH;
 }
 
-render(); calc();
+loadStore();
+applyProject(store.currentId);
+renderProjSel();
 </script>
 </body>
 </html>

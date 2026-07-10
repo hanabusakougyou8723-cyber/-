@@ -355,6 +355,7 @@ td.adjv{font-weight:700}
   <div class="toolbar">
     <span class="unit">単位:メートル(m) ／ 測点1のGHに基準標高を入力</span>
     <button class="btn" onclick="undo()">↩ 戻る</button>
+    <button class="btn" onclick="redo()">↪ 進む</button>
     <button class="btn" onclick="addRows(5)">＋5行</button>
     <button class="btn" onclick="window.print()">PDF出力</button>
   </div>
@@ -614,7 +615,7 @@ function confirmDelDate(){
 function closeDlg(id){ document.getElementById(id).classList.remove("show"); }
 
 /* ===== 元に戻す(削除の取り消し) ===== */
-let undoStack=[], snackTimer=null;
+let undoStack=[], redoStack=[], snackTimer=null;
 function syncCur(){
   const d=curDate();
   if(d){
@@ -628,6 +629,7 @@ function pushUndo(){
   syncCur();
   undoStack.push(JSON.stringify(store));
   if(undoStack.length>20) undoStack.shift();
+  redoStack=[]; // 新しい操作をしたら進む履歴はクリア
 }
 function showSnack(msg){
   document.getElementById("snackMsg").textContent=msg;
@@ -637,8 +639,21 @@ function showSnack(msg){
 }
 function hideSnack(){ document.getElementById("snack").classList.remove("show"); }
 function undo(){
-  if(undoStack.length===0){ hideSnack(); showSnack("これ以上戻れません"); return; }
+  if(undoStack.length===0){ showSnack("これ以上戻れません"); return; }
+  syncCur();
+  redoStack.push(JSON.stringify(store));
+  if(redoStack.length>20) redoStack.shift();
   store=JSON.parse(undoStack.pop());
+  if(!store.projects[store.currentId]) store.currentId=Object.keys(store.projects)[0];
+  hideSnack();
+  applyDate(); renderProjSel(); saveStore();
+}
+function redo(){
+  if(redoStack.length===0){ showSnack("進む操作はありません"); return; }
+  syncCur();
+  undoStack.push(JSON.stringify(store));
+  if(undoStack.length>20) undoStack.shift();
+  store=JSON.parse(redoStack.pop());
   if(!store.projects[store.currentId]) store.currentId=Object.keys(store.projects)[0];
   hideSnack();
   applyDate(); renderProjSel(); saveStore();
@@ -661,6 +676,7 @@ document.addEventListener("focusout",e=>{
     if(editSnap && e.target.value!==editVal){
       undoStack.push(editSnap);
       if(undoStack.length>20) undoStack.shift();
+      redoStack=[]; // 新しい編集をしたら進む履歴はクリア
     }
     editSnap=null; editVal=null; editEl=null;
   }

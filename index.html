@@ -120,6 +120,39 @@ tr.selrow td.rownum{background:#F6C6C0 !important}
 .snack.show{display:flex}
 .snackmsg{flex:1;color:#fff;font-size:14px}
 .snack .pbtn.undo{background:#FFD54F;border-color:#FFD54F;color:#333}
+
+/* ===== 電卓 ===== */
+.calcpad{
+  display:none;position:fixed;left:0;right:0;bottom:0;z-index:80;
+  background:#F7F7F2;border-top:3px solid var(--green);
+  padding:8px 10px 14px;box-shadow:0 -4px 16px rgba(0,0,0,.25);
+}
+.calcpad.show{display:block}
+.calc-head{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.calc-target{flex:1;font-size:13px;font-weight:700;color:var(--green-d)}
+.calc-x{border:none;background:transparent;font-size:20px;color:#666;padding:2px 8px}
+.calc-disp{
+  background:#fff;border:1px solid #BBB;border-radius:8px;
+  padding:10px 12px;text-align:right;font-family:var(--mono);
+  font-size:24px;font-weight:700;min-height:48px;overflow-x:auto;white-space:nowrap;
+}
+.calc-hint{font-size:11px;color:#777;margin:5px 0 7px;text-align:center}
+.calc-keys{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.calc-keys button{
+  padding:14px 0;border:1px solid #C3C3B8;border-radius:10px;background:#fff;
+  font-size:20px;font-weight:600;color:var(--ink);
+}
+.calc-keys button:active{background:#E5E5DC}
+.calc-keys button.op{background:#E8EFE5;color:var(--green-d)}
+.calc-keys button.clr{background:#F6DAD6;color:#C0392B;font-size:15px}
+.calc-keys button.eq{background:var(--green);color:#fff;font-size:22px}
+.calc-keys button.apply{
+  grid-column:span 2;background:var(--green-d);color:#fff;font-size:15px;
+}
+/* 電卓中のセル選択モード */
+tbody.pickmode input{pointer-events:none}
+tbody.pickmode td{cursor:pointer}
+tbody.pickmode td:active{background:#FFF4C4 !important}
 td input{
   width:100%;height:56px;border:none;background:transparent;
   font-family:var(--mono);font-size:15px;text-align:right;padding:0 4px;color:var(--ink);
@@ -182,7 +215,7 @@ td.adjv{font-weight:700}
   header h1{color:#000;font-size:18px}
   header input{background:transparent;color:#000;border:none;font-size:15px}
   header input::placeholder{color:transparent}
-  .tabs,.toolbar,.btn,.projbar,.ovl,.insbtn,.selbar,.snack{display:none !important}
+  .tabs,.toolbar,.btn,.projbar,.ovl,.insbtn,.selbar,.snack,.calcpad{display:none !important}
   .panel{display:block !important}
   .tablewrap{overflow:visible}
   table{min-width:0;width:100%}
@@ -322,6 +355,25 @@ td.adjv{font-weight:700}
 <div class="snack" id="snack">
   <span id="snackMsg" class="snackmsg"></span>
   <button class="pbtn undo" onclick="undo()">元に戻す</button>
+</div>
+
+<!-- 電卓 -->
+<div class="calcpad" id="calcpad">
+  <div class="calc-head">
+    <span id="calcTarget" class="calc-target"></span>
+    <button class="calc-x" onclick="closeCalc()">✕</button>
+  </div>
+  <div class="calc-disp" id="calcDisp">0</div>
+  <div class="calc-hint">表のセルをタップするとその数値を取り込めます</div>
+  <div class="calc-keys">
+    <button onclick="ck('7')">7</button><button onclick="ck('8')">8</button><button onclick="ck('9')">9</button><button class="op" onclick="ck('/')">÷</button>
+    <button onclick="ck('4')">4</button><button onclick="ck('5')">5</button><button onclick="ck('6')">6</button><button class="op" onclick="ck('*')">×</button>
+    <button onclick="ck('1')">1</button><button onclick="ck('2')">2</button><button onclick="ck('3')">3</button><button class="op" onclick="ck('-')">−</button>
+    <button onclick="ck('0')">0</button><button onclick="ck('.')">.</button><button class="op" onclick="calcBack()">⌫</button><button class="op" onclick="ck('+')">＋</button>
+    <button class="clr" onclick="calcClear()">クリア</button>
+    <button class="eq" onclick="calcEq()">＝</button>
+    <button class="apply" onclick="calcApply()">セルに入力</button>
+  </div>
 </div>
 
 <div class="tabs">
@@ -659,6 +711,107 @@ function redo(){
   applyDate(); renderProjSel(); saveStore();
 }
 
+/* ===== 電卓 ===== */
+let calcOpen=false, calcRow=null, calcCol=null, calcExpr="";
+const COLNAME={bs:"BS(後視)",fs:"FS(前視)",plan:"計画高",gh0:"基準標高"};
+let cellPressTimer=null, cellLongFired=false;
+function cellPress(i,col){
+  cellPressCancel();
+  cellLongFired=false;
+  if(selMode) return;
+  // 入力できないセルは対象外
+  if(col==="plan" && i===0) return;
+  if(col==="fs" && i===0) return;
+  if(col==="gh0" && i!==0) return;
+  cellPressTimer=setTimeout(()=>{ cellLongFired=true; openCalc(i,col); },600);
+}
+function cellPressCancel(){ clearTimeout(cellPressTimer); }
+function cellPressEnd(e,i,col){
+  cellPressCancel();
+  if(cellLongFired){ e.preventDefault(); cellLongFired=false; return; }
+  // 電卓が開いていればタップで値を取り込む
+  if(calcOpen){
+    e.preventDefault();
+    const el=e.currentTarget.querySelector("input");
+    const v = el? el.value : (e.currentTarget.textContent||"").trim();
+    takeValue(v);
+  }
+}
+function openCalc(i,col){
+  cellPressCancel();
+  calcOpen=true; calcRow=i; calcCol=col;
+  const cur=rows[i][col]||"";
+  calcExpr = cur!==""? String(cur) : "";
+  document.getElementById("calcTarget").textContent=
+    (rows[i].name||("行"+(i+1)))+" の "+(COLNAME[col]||col)+" を計算";
+  document.getElementById("calcpad").classList.add("show");
+  document.getElementById("tb").classList.add("pickmode");
+  if(document.activeElement) document.activeElement.blur();
+  drawCalc();
+}
+function closeCalc(){
+  calcOpen=false; calcRow=null; calcCol=null; calcExpr="";
+  document.getElementById("calcpad").classList.remove("show");
+  document.getElementById("tb").classList.remove("pickmode");
+}
+// セルの数値を式に取り込む
+function takeValue(v){
+  const n=parseFloat(String(v).replace(/[^0-9.\-]/g,""));
+  if(isNaN(n)) return;
+  // 直前が数字なら演算子なしで置き換えず、末尾が演算子または空なら追加
+  if(calcExpr==="" || /[+\-*/]$/.test(calcExpr)){ calcExpr+=n; }
+  else{ calcExpr=String(n); }
+  drawCalc();
+}
+// 計算値セル(IH・読み)のタップ取り込み
+function pickCalcValue(td){
+  if(!calcOpen) return;
+  takeValue((td.textContent||"").trim());
+}
+function ck(c){
+  if(/[+\-*/]/.test(c)){
+    if(calcExpr==="") return;
+    if(/[+\-*/]$/.test(calcExpr)) calcExpr=calcExpr.slice(0,-1);
+    calcExpr+=c;
+  }else{
+    calcExpr+=c;
+  }
+  drawCalc();
+}
+function calcBack(){ calcExpr=calcExpr.slice(0,-1); drawCalc(); }
+function calcClear(){ calcExpr=""; drawCalc(); }
+function calcResult(){
+  if(calcExpr==="") return null;
+  const e=calcExpr.replace(/[+\-*/]$/,"");
+  if(!/^[0-9.+\-*/() ]+$/.test(e)) return null;
+  try{ const r=Function('"use strict";return('+e+')')(); return isFinite(r)? r : null; }catch(err){ return null; }
+}
+function calcEq(){
+  const r=calcResult();
+  if(r==null) return;
+  calcExpr=String(Math.round(r*1000)/1000);
+  drawCalc();
+}
+function calcApply(){
+  const r=calcResult();
+  if(r==null || calcRow==null) return;
+  const v=(Math.round(r*1000)/1000).toFixed(3);
+  syncCur();
+  undoStack.push(JSON.stringify(store));
+  if(undoStack.length>20) undoStack.shift();
+  redoStack=[];
+  rows[calcRow][calcCol]=v;
+  closeCalc();
+  render(); calc(); saveStore();
+}
+function drawCalc(){
+  const d=document.getElementById("calcDisp");
+  const r=calcResult();
+  const shown=calcExpr===""? "0" : calcExpr;
+  d.innerHTML = (r!=null && /[+\-*/]/.test(calcExpr))
+    ? `<span style="font-size:15px;color:#888">${shown} =</span> ${Math.round(r*1000)/1000}`
+    : shown;
+}
 /* ===== セル編集の取り消し記録 ===== */
 // 入力欄にカーソルが入った時点の状態を覚えておき、値が変わって離れたら履歴に積む
 let editSnap=null, editVal=null, editEl=null;
@@ -774,18 +927,26 @@ function render(){
       <td class="rownum" ontouchstart="rowPress(${i})" ontouchend="rowPressCancel()" ontouchmove="rowPressCancel()" onclick="selTap(${i})" oncontextmenu="enterSel(${i});return false">
         <input type="text" class="ptname" value="${r.name}" placeholder="測点" oninput="upd(${i},'name',this.value)">
       </td>
-      <td><input type="number" inputmode="decimal" step="0.001" value="${r.bs}" oninput="upd(${i},'bs',this.value)"></td>
-      <td class="calc" id="ih${i}"></td>
-      <td>${i===0?"":`<input type="number" inputmode="decimal" step="0.001" value="${r.fs}" data-col="fs" data-row="${i}" enterkeyhint="next" onkeydown="nextCell(event,${i},'fs')" oninput="updMove(${i},'fs',this)">`}</td>
-      <td>${i===0
-        ?`<input type="number" inputmode="decimal" step="0.001" value="${r.gh0}" placeholder="基準標高" oninput="upd(${i},'gh0',this.value)" style="color:var(--ink)">`
-        :`<span class="calc" style="display:block;text-align:right;padding:0 6px" id="gh${i}"></span>`}</td>
-      <td>${i===0
+      <td ${cellEvt(i,'bs')}><input type="number" inputmode="decimal" step="0.001" value="${r.bs}" data-col="bs" data-row="${i}" oninput="upd(${i},'bs',this.value)"></td>
+      <td class="calc" id="ih${i}" ${pickEvt(i,'ih')}></td>
+      <td ${cellEvt(i,'fs')}>${i===0?"":`<input type="number" inputmode="decimal" step="0.001" value="${r.fs}" data-col="fs" data-row="${i}" enterkeyhint="next" onkeydown="nextCell(event,${i},'fs')" oninput="updMove(${i},'fs',this)">`}</td>
+      <td ${cellEvt(i,'gh0')}>${i===0
+        ?`<input type="number" inputmode="decimal" step="0.001" value="${r.gh0}" data-col="gh0" data-row="${i}" placeholder="基準標高" oninput="upd(${i},'gh0',this.value)" style="color:var(--ink)">`
+        :`<span class="calc" style="display:block;text-align:right;padding:0 4px" id="gh${i}"></span>`}</td>
+      <td ${cellEvt(i,'plan')}>${i===0
         ?`<span style="display:block;text-align:center;color:#BBB">─</span>`
         :`<input type="number" inputmode="decimal" step="0.001" value="${r.plan}" data-col="plan" data-row="${i}" enterkeyhint="next" onkeydown="nextCell(event,${i},'plan')" oninput="updMove(${i},'plan',this)">`}</td>
-      <td class="calc reading" id="rd${i}"></td>
+      <td class="calc reading" id="rd${i}" ${pickEvt(i,'rd')}></td>
       <td class="calc" id="df${i}"></td>
     </tr>`).join("");
+}
+// 入力セル: 長押しで電卓、電卓中はタップで値を取り込み
+function cellEvt(i,col){
+  return `ontouchstart="cellPress(${i},'${col}')" ontouchend="cellPressEnd(event,${i},'${col}')" ontouchmove="cellPressCancel()" oncontextmenu="openCalc(${i},'${col}');return false"`;
+}
+// 計算値セル: 電卓中はタップで値を取り込み
+function pickEvt(i,kind){
+  return `onclick="pickCalcValue(this)"`;
 }
 
 // Enter(次へ)キーで同じ列の下のセルへ移動

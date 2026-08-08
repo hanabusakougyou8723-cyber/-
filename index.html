@@ -357,6 +357,32 @@ td.adjv{font-weight:700}
   <button class="pbtn undo" onclick="undo()">元に戻す</button>
 </div>
 
+<!-- 計画高の貼り付けダイアログ -->
+<div class="ovl" id="pastePlanDlg">
+  <div class="dlg">
+    <h3>計画高の貼り付け</h3>
+    <p id="pasteMsg" style="font-size:13px;line-height:1.7;color:#444;margin-bottom:12px"></p>
+    <div class="dlg-btns" style="flex-direction:column;align-items:stretch;gap:8px">
+      <button class="pbtn primary" onclick="pastePlan(false)">計画高のみ貼り付け</button>
+      <button class="pbtn primary" onclick="pastePlan(true)">測点名も一緒に貼り付け</button>
+      <button class="pbtn" onclick="closeDlg('pastePlanDlg')">キャンセル</button>
+    </div>
+  </div>
+</div>
+
+<!-- すべて貼り付けダイアログ -->
+<div class="ovl" id="pasteAllDlg">
+  <div class="dlg">
+    <h3>野帳をすべて貼り付け</h3>
+    <p id="pasteAllMsg" style="font-size:13px;line-height:1.7;color:#444;margin-bottom:12px"></p>
+    <div class="dlg-btns" style="flex-direction:column;align-items:stretch;gap:8px">
+      <button class="pbtn primary" onclick="pasteAll(false)">観測値も含めてすべて</button>
+      <button class="pbtn primary" onclick="pasteAll(true)">測点・計画高のみ(BS/FSは空)</button>
+      <button class="pbtn" onclick="closeDlg('pasteAllDlg')">キャンセル</button>
+    </div>
+  </div>
+</div>
+
 <!-- 電卓 -->
 <div class="calcpad" id="calcpad">
   <div class="calc-head">
@@ -405,11 +431,21 @@ td.adjv{font-weight:700}
     </table>
   </div>
   <div class="toolbar">
-    <span class="unit">単位:メートル(m) ／ 測点1のGHに基準標高を入力</span>
+    <span class="unit">単位:メートル(m)</span>
     <button class="btn" onclick="undo()">↩ 戻る</button>
     <button class="btn" onclick="redo()">↪ 進む</button>
     <button class="btn" onclick="addRows(5)">＋5行</button>
     <button class="btn" onclick="window.print()">PDF出力</button>
+  </div>
+  <div class="toolbar">
+    <span class="unit">計画高・測点をまとめて複製</span>
+    <button class="btn" onclick="copyPlan()">計画高をコピー</button>
+    <button class="btn" onclick="openPastePlanDlg()">貼り付け</button>
+  </div>
+  <div class="toolbar">
+    <span class="unit">野帳全体を複製(観測値も含む)</span>
+    <button class="btn" onclick="copyAll()">すべてコピー</button>
+    <button class="btn" onclick="openPasteAllDlg()">すべて貼り付け</button>
   </div>
   <div class="checksum" id="checksum"></div>
 </div>
@@ -709,6 +745,87 @@ function redo(){
   if(!store.projects[store.currentId]) store.currentId=Object.keys(store.projects)[0];
   hideSnack();
   applyDate(); renderProjSel(); saveStore();
+}
+
+/* ===== 計画高のコピー・貼り付け ===== */
+const CLIP="yacho_clip_plan_v1";
+function copyPlan(){
+  const data={
+    src:(curProj().name||"")+" "+fmtDate(curDate().date),
+    items:rows.map(r=>({name:r.name,plan:r.plan}))
+  };
+  try{ localStorage.setItem(CLIP,JSON.stringify(data)); }catch(e){}
+  const n=rows.filter(r=>r.plan!=="").length;
+  showSnack("計画高 "+n+"点をコピーしました");
+}
+function getClip(){
+  try{ const s=localStorage.getItem(CLIP); return s? JSON.parse(s):null; }catch(e){ return null; }
+}
+function openPastePlanDlg(){
+  const c=getClip();
+  if(!c){ showSnack("コピーされたデータがありません"); return; }
+  const n=c.items.filter(x=>x.plan!=="").length;
+  document.getElementById("pasteMsg").textContent=
+    `コピー元: ${c.src}(${c.items.length}行・計画高${n}点)。上から順に貼り付けます。今の計画高は上書きされます。`;
+  document.getElementById("pastePlanDlg").classList.add("show");
+}
+function pastePlan(withName){
+  const c=getClip();
+  if(!c){ closeDlg("pastePlanDlg"); return; }
+  pushUndo();
+  while(rows.length<c.items.length){
+    rows.push({name:"",bs:"",fs:"",gh0:"",plan:""});
+  }
+  c.items.forEach((x,i)=>{
+    if(i>0) rows[i].plan=x.plan||"";   // 1行目(KBM)は計画高なし
+    if(withName && x.name) rows[i].name=x.name;
+  });
+  closeDlg("pastePlanDlg");
+  render(); calc(); saveStore();
+  showSnack("計画高を貼り付けました");
+}
+
+/* ===== すべて複製(野帳全体) ===== */
+const CLIPALL="yacho_clip_all_v1";
+function copyAll(){
+  syncCur();
+  const d=curDate();
+  const data={
+    src:(curProj().name||"")+" "+fmtDate(d.date)+(d.memo?(" "+d.memo):""),
+    rows:JSON.parse(JSON.stringify(rows)),
+    knownH:d.knownH||"", grade:d.grade||"10", routeKm:d.routeKm||""
+  };
+  try{ localStorage.setItem(CLIPALL,JSON.stringify(data)); }catch(e){}
+  showSnack("野帳(" + rows.length + "行)をすべてコピーしました");
+}
+function getClipAll(){
+  try{ const s=localStorage.getItem(CLIPALL); return s? JSON.parse(s):null; }catch(e){ return null; }
+}
+function openPasteAllDlg(){
+  const c=getClipAll();
+  if(!c){ showSnack("コピーされたデータがありません"); return; }
+  document.getElementById("pasteAllMsg").textContent=
+    `コピー元: ${c.src}(${c.rows.length}行)。今開いている野帳の内容はすべて置き換わります。`;
+  document.getElementById("pasteAllDlg").classList.add("show");
+}
+function pasteAll(planOnly){
+  const c=getClipAll();
+  if(!c){ closeDlg("pasteAllDlg"); return; }
+  pushUndo();
+  rows=JSON.parse(JSON.stringify(c.rows));
+  if(planOnly){
+    rows.forEach((r,i)=>{ r.bs=""; r.fs=""; if(i===0) r.gh0=r.gh0; });
+  }
+  const d=curDate();
+  d.knownH = planOnly? "" : (c.knownH||"");
+  d.grade = c.grade||"10";
+  d.routeKm = c.routeKm||"";
+  document.getElementById("knownH").value=d.knownH;
+  document.getElementById("grade").value=d.grade;
+  document.getElementById("routeKm").value=d.routeKm;
+  closeDlg("pasteAllDlg");
+  render(); calc(); saveStore();
+  showSnack(planOnly? "測点・計画高を貼り付けました" : "野帳をすべて貼り付けました");
 }
 
 /* ===== 電卓 ===== */

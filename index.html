@@ -383,6 +383,19 @@ td.adjv{font-weight:700}
   </div>
 </div>
 
+<!-- バックアップ読み込みダイアログ -->
+<div class="ovl" id="importDlg">
+  <div class="dlg">
+    <h3>バックアップの読み込み</h3>
+    <p id="importMsg" style="font-size:13px;line-height:1.7;color:#444;margin-bottom:12px"></p>
+    <div class="dlg-btns" style="flex-direction:column;align-items:stretch;gap:8px">
+      <button class="pbtn primary" onclick="applyImport(true)">今のデータに追加する</button>
+      <button class="pbtn danger" onclick="applyImport(false)">すべて置き換える</button>
+      <button class="pbtn" onclick="closeDlg('importDlg')">キャンセル</button>
+    </div>
+  </div>
+</div>
+
 <!-- 電卓 -->
 <div class="calcpad" id="calcpad">
   <div class="calc-head">
@@ -446,6 +459,12 @@ td.adjv{font-weight:700}
     <span class="unit">野帳全体を複製(観測値も含む)</span>
     <button class="btn" onclick="copyAll()">すべてコピー</button>
     <button class="btn" onclick="openPasteAllDlg()">すべて貼り付け</button>
+  </div>
+  <div class="toolbar">
+    <span class="unit">全工事のバックアップ</span>
+    <button class="btn" onclick="exportBackup()">書き出し</button>
+    <button class="btn" onclick="document.getElementById('importFile').click()">読み込み</button>
+    <input type="file" id="importFile" accept=".json,application/json" style="display:none" onchange="importBackup(this)">
   </div>
   <div class="checksum" id="checksum"></div>
 </div>
@@ -826,6 +845,68 @@ function pasteAll(planOnly){
   closeDlg("pasteAllDlg");
   render(); calc(); saveStore();
   showSnack(planOnly? "測点・計画高を貼り付けました" : "野帳をすべて貼り付けました");
+}
+
+/* ===== バックアップ ===== */
+function exportBackup(){
+  syncCur();
+  const data={app:"suijun_yacho",version:1,exported:new Date().toISOString(),store:store};
+  const blob=new Blob([JSON.stringify(data,null,1)],{type:"application/json"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+  const d=new Date();
+  const stamp=d.getFullYear()+String(d.getMonth()+1).padStart(2,"0")+String(d.getDate()).padStart(2,"0")
+    +"_"+String(d.getHours()).padStart(2,"0")+String(d.getMinutes()).padStart(2,"0");
+  a.href=url; a.download="yacho_backup_"+stamp+".json";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+  const cnt=Object.keys(store.projects).length;
+  showSnack("バックアップを書き出しました(工事"+cnt+"件)");
+}
+let importData=null;
+function importBackup(el){
+  const f=el.files&&el.files[0];
+  el.value="";
+  if(!f) return;
+  const rd=new FileReader();
+  rd.onload=()=>{
+    try{
+      const j=JSON.parse(rd.result);
+      const st=j.store||j;
+      if(!st.projects) throw new Error("形式が違います");
+      importData=st;
+      const pn=Object.keys(st.projects).length;
+      let dn=0; Object.values(st.projects).forEach(p=>{ dn+=Object.keys(p.dates||{}).length; });
+      const when=j.exported? new Date(j.exported).toLocaleString("ja-JP"):"日時不明";
+      document.getElementById("importMsg").textContent=
+        `読み込むファイル: 工事${pn}件・日付データ${dn}件(書き出し ${when})`;
+      document.getElementById("importDlg").classList.add("show");
+    }catch(err){
+      showSnack("読み込めませんでした(ファイル形式を確認してください)");
+    }
+  };
+  rd.onerror=()=>showSnack("ファイルを開けませんでした");
+  rd.readAsText(f);
+}
+function applyImport(merge){
+  if(!importData){ closeDlg("importDlg"); return; }
+  pushUndo();
+  if(merge){
+    Object.entries(importData.projects).forEach(([id,p])=>{
+      const nid = store.projects[id]? (id+"_i"+Date.now()+Math.random().toString(36).slice(2,5)) : id;
+      store.projects[nid]=p;
+    });
+  }else{
+    store={projects:importData.projects,currentId:importData.currentId};
+  }
+  if(!store.projects[store.currentId]) store.currentId=Object.keys(store.projects)[0];
+  importData=null;
+  closeDlg("importDlg");
+  // 先に保存してから移行処理を通す(旧形式のバックアップにも対応)
+  try{ localStorage.setItem(STORE,JSON.stringify(store)); }catch(e){}
+  loadStore();
+  applyDate(); renderProjSel(); saveStore();
+  showSnack(merge? "バックアップを追加しました" : "バックアップを復元しました");
 }
 
 /* ===== 電卓 ===== */

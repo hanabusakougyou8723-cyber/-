@@ -135,6 +135,19 @@ tr.selrow td.rownum{background:#F6C6C0 !important}
   padding:8px 12px 16px;box-shadow:0 -4px 16px rgba(0,0,0,.25);
 }
 .voicepad.show{display:block}
+.voice-row{
+  display:flex;gap:6px;align-items:center;margin-bottom:8px;
+}
+.voice-row select{
+  flex:1;min-width:0;padding:9px 6px;border:1px solid #BBB;border-radius:8px;
+  font-size:15px;background:#fff;
+}
+.vlabel{font-size:12px;font-weight:700;color:#1D5FA8;flex-shrink:0}
+.vmove{
+  padding:9px 12px;border:1px solid #1D5FA8;border-radius:8px;
+  background:#fff;color:#1D5FA8;font-size:14px;font-weight:700;flex-shrink:0;
+}
+.vmove:active{background:#1D5FA8;color:#fff}
 .voice-disp{
   background:#fff;border:1px solid #BBB;border-radius:8px;padding:12px;
   text-align:center;font-size:15px;color:#555;min-height:50px;
@@ -429,6 +442,18 @@ td.adjv{font-weight:700}
   <div class="calc-head">
     <span id="voiceTarget" class="calc-target"></span>
     <button class="calc-x" onclick="stopVoice()">✕</button>
+  </div>
+  <div class="voice-row">
+    <span class="vlabel">入力先</span>
+    <select id="voiceCol" onchange="changeVoiceCol(this.value)">
+      <option value="name">測点名</option>
+      <option value="bs">BS(後視)</option>
+      <option value="fs">FS(前視)</option>
+      <option value="plan">計画高</option>
+    </select>
+    <button class="vmove" onclick="moveVoiceRow(-1)">▲</button>
+    <select id="voiceRowSel" onchange="setVoiceRow(this.value)"></select>
+    <button class="vmove" onclick="moveVoiceRow(1)">▼</button>
   </div>
   <div class="voice-disp" id="voiceDisp">マイクを押して話してください</div>
   <div class="voice-heard" id="voiceHeard"></div>
@@ -965,6 +990,8 @@ function startVoice(col){
   voiceRow = (col==="plan"||col==="fs")? 1 : 0; // 計画高・FSはKBM行が対象外
   closeCalc();
   document.getElementById("voicepad").classList.add("show");
+  document.getElementById("tb").classList.add("pickmode");
+  if(document.activeElement) document.activeElement.blur();
   updateVoiceTarget();
   document.getElementById("voiceDisp").textContent="マイクを押して話してください";
   document.getElementById("voiceHeard").textContent="";
@@ -974,10 +1001,46 @@ function startVoice(col){
 }
 function updateVoiceTarget(){
   document.getElementById("voiceTarget").textContent=
-    (VCOLNAME[voiceCol]||voiceCol)+" を音声入力 → "+(rows[voiceRow]?(rows[voiceRow].name||("行"+(voiceRow+1))):"");
+    (VCOLNAME[voiceCol]||voiceCol)+" を音声入力";
+  document.getElementById("voiceCol").value=voiceCol;
+  // 行の選択リストを作成(入力できない行は除外)
+  const sel=document.getElementById("voiceRowSel");
+  let opts="";
+  rows.forEach((r,i)=>{
+    if(voiceCol==="plan" && i===0) return;
+    if(voiceCol==="fs" && i===0) return;
+    opts+=`<option value="${i}" ${i===voiceRow?"selected":""}>${(r.name||("行"+(i+1))).replace(/</g,"&lt;")}</option>`;
+  });
+  sel.innerHTML=opts;
+  sel.value=String(voiceRow);
   document.querySelectorAll("#tb tr").forEach((tr,i)=>{
     tr.style.background = (i===voiceRow)? "#E3F0FB" : "";
   });
+}
+function setVoiceRow(v){
+  voiceRow=parseInt(v,10);
+  updateVoiceTarget();
+  // 対象の行が画面に見えるようスクロール
+  const tr=document.querySelectorAll("#tb tr")[voiceRow];
+  if(tr) tr.scrollIntoView({block:"center",behavior:"smooth"});
+}
+function moveVoiceRow(d){
+  let n=voiceRow+d;
+  const min=(voiceCol==="plan"||voiceCol==="fs")? 1 : 0;
+  if(n<min) n=min;
+  if(n>=rows.length){ addRows(5); render(); calc(); }
+  if(n>=rows.length) n=rows.length-1;
+  voiceRow=n;
+  setVoiceRow(String(n));
+}
+function changeVoiceCol(col){
+  voiceCol=col;
+  const min=(col==="plan"||col==="fs")? 1 : 0;
+  if(voiceRow<min) voiceRow=min;
+  document.getElementById("voiceHint").textContent = (col==="name")
+    ? "例:「ケービーエム」「ナンバー3」「ナンバー3 プラス 5」／ 続けて話すと次の行に入ります"
+    : "例:「いち てん ごー まる まる」「1.500」／ 続けて話すと次の行に入ります";
+  updateVoiceTarget();
 }
 function toggleVoice(){ listening? stopListen() : startListen(); }
 function startListen(){
@@ -1041,10 +1104,13 @@ function applyVoice(v){
   if(voiceRow>=rows.length) addRows(5);
   render(); calc(); saveStore();
   updateVoiceTarget();
+  const tr=document.querySelectorAll("#tb tr")[voiceRow];
+  if(tr) tr.scrollIntoView({block:"center",behavior:"smooth"});
 }
 function stopVoice(){
   stopListen();
   document.getElementById("voicepad").classList.remove("show");
+  document.getElementById("tb").classList.remove("pickmode");
   document.querySelectorAll("#tb tr").forEach(tr=>tr.style.background="");
   voiceCol=null;
 }
@@ -1189,6 +1255,13 @@ function cellPressCancel(){ clearTimeout(cellPressTimer); }
 function cellPressEnd(e,i,col){
   cellPressCancel();
   if(cellLongFired){ e.preventDefault(); cellLongFired=false; return; }
+  // 音声入力中はタップで入力先を指定
+  if(voiceCol){
+    e.preventDefault();
+    const min=(voiceCol==="plan"||voiceCol==="fs")? 1 : 0;
+    if(i>=min){ voiceCol = (col==="gh0")? voiceCol : col; setVoiceRow(String(i)); updateVoiceTarget(); }
+    return;
+  }
   // 電卓が開いていればタップで値を取り込む
   if(calcOpen){
     e.preventDefault();
@@ -1325,6 +1398,8 @@ function enterSel(i){
   updateSelView();
 }
 function selTap(i){
+  // 音声入力中は入力先の指定
+  if(voiceCol){ voiceCol="name"; setVoiceRow(String(i)); updateVoiceTarget(); return; }
   if(!selMode) return;
   if(selected.has(i)){ selected.delete(i); } else { selected.add(i); }
   if(selected.size===0){ exitSel(); return; }

@@ -4,6 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>野帳 ─ 水準測量</title>
+<meta name="theme-color" content="#6B9E6F">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="野帳">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='36' fill='%236B9E6F'/%3E%3Crect x='30' y='42' width='132' height='108' rx='6' fill='%23FBFAF4'/%3E%3Cg stroke='%236B9E6F' stroke-width='4'%3E%3Cline x1='30' y1='70' x2='162' y2='70'/%3E%3Cline x1='30' y1='97' x2='162' y2='97'/%3E%3Cline x1='30' y1='124' x2='162' y2='124'/%3E%3Cline x1='63' y1='42' x2='63' y2='150'/%3E%3Cline x1='96' y1='42' x2='96' y2='150'/%3E%3Cline x1='129' y1='42' x2='129' y2='150'/%3E%3C/g%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='36' fill='%236B9E6F'/%3E%3Crect x='30' y='42' width='132' height='108' rx='6' fill='%23FBFAF4'/%3E%3Cg stroke='%236B9E6F' stroke-width='4'%3E%3Cline x1='30' y1='70' x2='162' y2='70'/%3E%3Cline x1='30' y1='97' x2='162' y2='97'/%3E%3Cline x1='30' y1='124' x2='162' y2='124'/%3E%3Cline x1='63' y1='42' x2='63' y2='150'/%3E%3Cline x1='96' y1='42' x2='96' y2='150'/%3E%3Cline x1='129' y1='42' x2='129' y2='150'/%3E%3C/g%3E%3C/svg%3E">
 <style>
 :root{
   --green:#6B9E6F;
@@ -462,6 +469,7 @@ td.adjv{font-weight:700}
   </div>
   <div class="toolbar">
     <span class="unit">全工事のバックアップ</span>
+    <button class="btn" id="installBtn" style="display:none" onclick="installApp()">📲 アプリ追加</button>
     <button class="btn" onclick="exportBackup()">書き出し</button>
     <button class="btn" onclick="document.getElementById('importFile').click()">読み込み</button>
     <input type="file" id="importFile" accept=".json,application/json" style="display:none" onchange="importBackup(this)">
@@ -846,6 +854,66 @@ function pasteAll(planOnly){
   render(); calc(); saveStore();
   showSnack(planOnly? "測点・計画高を貼り付けました" : "野帳をすべて貼り付けました");
 }
+
+/* ===== PWA(アプリとしてインストール・オフライン動作) ===== */
+(function(){
+  const ICON = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='36' fill='%236B9E6F'/%3E%3Crect x='30' y='42' width='132' height='108' rx='6' fill='%23FBFAF4'/%3E%3Cg stroke='%236B9E6F' stroke-width='4'%3E%3Cline x1='30' y1='70' x2='162' y2='70'/%3E%3Cline x1='30' y1='97' x2='162' y2='97'/%3E%3Cline x1='30' y1='124' x2='162' y2='124'/%3E%3Cline x1='63' y1='42' x2='63' y2='150'/%3E%3Cline x1='96' y1='42' x2='96' y2='150'/%3E%3Cline x1='129' y1='42' x2='129' y2='150'/%3E%3C/g%3E%3C/svg%3E";
+  const here = location.pathname;
+  const manifest = {
+    name:"水準測量野帳", short_name:"野帳",
+    start_url: here, scope: here,
+    display:"standalone", orientation:"any",
+    background_color:"#F2F2EE", theme_color:"#6B9E6F",
+    icons:[
+      {src:ICON, sizes:"192x192", type:"image/svg+xml", purpose:"any"},
+      {src:ICON, sizes:"512x512", type:"image/svg+xml", purpose:"any maskable"}
+    ]
+  };
+  const mLink=document.createElement("link");
+  mLink.rel="manifest";
+  mLink.href=URL.createObjectURL(new Blob([JSON.stringify(manifest)],{type:"application/manifest+json"}));
+  document.head.appendChild(mLink);
+
+  // オフライン用Service Worker(ページ自身をキャッシュ)
+  if("serviceWorker" in navigator && location.protocol==="https:"){
+    const swCode = `
+const C="yacho-v1";
+self.addEventListener("install",e=>{self.skipWaiting();});
+self.addEventListener("activate",e=>{e.waitUntil(self.clients.claim());});
+self.addEventListener("fetch",e=>{
+  if(e.request.method!=="GET") return;
+  e.respondWith(
+    fetch(e.request).then(r=>{
+      const cp=r.clone();
+      caches.open(C).then(c=>c.put(e.request,cp));
+      return r;
+    }).catch(()=>caches.match(e.request).then(r=>r||caches.match(${JSON.stringify(here)})))
+  );
+});`;
+    const swUrl=URL.createObjectURL(new Blob([swCode],{type:"text/javascript"}));
+    navigator.serviceWorker.register(swUrl,{scope:here}).catch(()=>{});
+  }
+
+  // インストールボタン
+  let deferred=null;
+  window.addEventListener("beforeinstallprompt",e=>{
+    e.preventDefault(); deferred=e;
+    const b=document.getElementById("installBtn");
+    if(b) b.style.display="inline-block";
+  });
+  window.installApp=function(){
+    if(deferred){
+      deferred.prompt();
+      deferred.userChoice.finally(()=>{ deferred=null;
+        const b=document.getElementById("installBtn"); if(b) b.style.display="none"; });
+    }else{
+      showSnack("メニュー(⋮)の「アプリをインストール」から追加できます");
+    }
+  };
+  window.addEventListener("appinstalled",()=>{
+    const b=document.getElementById("installBtn"); if(b) b.style.display="none";
+  });
+})();
 
 /* ===== バックアップ ===== */
 function exportBackup(){

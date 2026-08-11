@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0e1417">
+<title>実戦収支ノート</title>
+<style>
+:root{
+  --bg:#0e1417;
+  --panel:#161f24;
+  --panel2:#1c272d;
+  --line:#2a383f;
+  --led:#ffb020;
+  --win:#35d39a;
+  --lose:#ff5a52;
+  --fg:#e6ecef;
+  --mut:#7f939e;
+  --font-body:system-ui,-apple-system,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;
+  --font-num:ui-monospace,"SF Mono","Roboto Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg);color:var(--fg);font-family:var(--font-body);
+  font-size:15px;line-height:1.6;-webkit-text-size-adjust:100%;
+  padding-bottom:env(safe-area-inset-bottom);
+}
+.wrap{max-width:760px;margin:0 auto;padding:0 14px 64px}
+
+/* ---- カウンター ---- */
+.counter{
+  margin:14px 0 0;background:var(--panel);border:1px solid var(--line);
+  border-radius:14px;overflow:hidden;
+}
+.counter-top{padding:16px 16px 10px;display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.ctr-label{font-size:11px;letter-spacing:.18em;color:var(--mut);margin:0 0 2px}
+.ctr-main{font-family:var(--font-num);font-size:38px;font-weight:700;line-height:1;
+  letter-spacing:.01em;font-variant-numeric:tabular-nums;color:var(--led);
+  text-shadow:0 0 18px rgba(255,176,32,.25)}
+.ctr-main.win{color:var(--win);text-shadow:0 0 18px rgba(53,211,154,.22)}
+.ctr-main.lose{color:var(--lose);text-shadow:0 0 18px rgba(255,90,82,.22)}
+.ctr-sub{display:flex;gap:18px;text-align:right}
+.ctr-sub div{min-width:56px}
+.ctr-sub b{display:block;font-family:var(--font-num);font-size:17px;font-weight:600;font-variant-numeric:tabular-nums}
+.range{display:flex;gap:6px;padding:0 16px 12px;flex-wrap:wrap}
+.range button{
+  background:transparent;border:1px solid var(--line);color:var(--mut);
+  font-family:var(--font-body);font-size:12px;padding:5px 11px;border-radius:99px;cursor:pointer;
+}
+.range button[aria-pressed="true"]{border-color:var(--led);color:var(--led)}
+#slump{display:block;width:100%;height:120px;background:var(--panel2);border-top:1px solid var(--line)}
+.slump-empty{padding:26px 16px;text-align:center;color:var(--mut);font-size:13px;
+  background:var(--panel2);border-top:1px solid var(--line)}
+
+/* ---- タブ ---- */
+.tabs{display:flex;gap:2px;margin:16px 0 0;border-bottom:1px solid var(--line)}
+.tabs button{
+  flex:1;background:none;border:0;border-bottom:2px solid transparent;
+  color:var(--mut);font-family:var(--font-body);font-size:14px;padding:11px 4px;cursor:pointer;
+}
+.tabs button[aria-selected="true"]{color:var(--fg);border-bottom-color:var(--led)}
+section[hidden]{display:none}
+section{padding-top:18px}
+
+/* ---- フォーム ---- */
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.f{display:flex;flex-direction:column;gap:5px}
+.f.wide{grid-column:1/-1}
+label{font-size:11px;letter-spacing:.12em;color:var(--mut)}
+input,select,textarea{
+  background:var(--panel);border:1px solid var(--line);border-radius:9px;
+  color:var(--fg);font-family:var(--font-body);font-size:16px;padding:10px 11px;width:100%;
+}
+input[type=number],input[type=date]{font-family:var(--font-num);font-variant-numeric:tabular-nums}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--led);outline-offset:1px;border-color:transparent}
+textarea{resize:vertical;min-height:60px;font-size:15px}
+.seg{display:flex;gap:0;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.seg button{flex:1;background:var(--panel);border:0;color:var(--mut);padding:11px 0;
+  font-family:var(--font-body);font-size:14px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--led);color:#1a1200;font-weight:600}
+.calc{grid-column:1/-1;background:var(--panel2);border:1px dashed var(--line);border-radius:10px;
+  padding:12px 14px;display:flex;align-items:center;justify-content:space-between}
+.calc span{font-size:11px;letter-spacing:.14em;color:var(--mut)}
+.calc b{font-family:var(--font-num);font-size:26px;font-variant-numeric:tabular-nums;color:var(--led)}
+.calc b.win{color:var(--win)} .calc b.lose{color:var(--lose)}
+.actions{display:flex;gap:10px;margin-top:16px}
+.btn{flex:1;background:var(--led);color:#1a1200;border:0;border-radius:10px;
+  font-family:var(--font-body);font-size:15px;font-weight:700;padding:14px;cursor:pointer}
+.btn.ghost{background:transparent;border:1px solid var(--line);color:var(--mut);font-weight:400}
+.btn:active{transform:translateY(1px)}
+
+/* ---- 履歴 ---- */
+.filters{display:flex;gap:8px;margin-bottom:14px}
+.filters select{font-size:13px;padding:8px 9px}
+.rec{background:var(--panel);border:1px solid var(--line);border-radius:11px;
+  padding:12px 14px;margin-bottom:9px;display:flex;gap:12px;align-items:flex-start}
+.rec-body{flex:1;min-width:0}
+.rec-head{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.rec-date{font-family:var(--font-num);font-size:12px;color:var(--mut)}
+.tag{font-size:10px;padding:1px 6px;border-radius:4px;border:1px solid var(--line);color:var(--mut)}
+.rec-shop{font-weight:600;font-size:15px;word-break:break-all}
+.rec-model{font-size:13px;color:var(--mut);word-break:break-all;margin-top:1px}
+.rec-meta{font-family:var(--font-num);font-size:11px;color:var(--mut);margin-top:5px}
+.rec-memo{font-size:12px;color:var(--mut);margin-top:5px;white-space:pre-wrap;word-break:break-all}
+.rec-amt{font-family:var(--font-num);font-size:19px;font-weight:600;font-variant-numeric:tabular-nums;
+  text-align:right;white-space:nowrap}
+.rec-amt.win{color:var(--win)} .rec-amt.lose{color:var(--lose)}
+.rec-btns{display:flex;gap:8px;justify-content:flex-end;margin-top:8px}
+.mini{background:transparent;border:1px solid var(--line);color:var(--mut);
+  font-family:var(--font-body);font-size:12px;padding:4px 12px;border-radius:7px;cursor:pointer}
+.mini.danger[data-armed="1"]{border-color:var(--lose);color:var(--lose)}
+.empty{text-align:center;color:var(--mut);font-size:13px;padding:40px 12px;
+  border:1px dashed var(--line);border-radius:12px}
+
+/* ---- 集計 ---- */
+h3{font-size:12px;letter-spacing:.16em;color:var(--mut);font-weight:600;margin:24px 0 10px}
+h3:first-child{margin-top:0}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{padding:9px 6px;border-bottom:1px solid var(--line);text-align:right}
+th{font-size:10px;letter-spacing:.1em;color:var(--mut);font-weight:500;white-space:nowrap}
+th:first-child,td:first-child{text-align:left;word-break:break-all}
+td.num{font-family:var(--font-num);font-variant-numeric:tabular-nums}
+td.win{color:var(--win)} td.lose{color:var(--lose)}
+.bars{display:flex;flex-direction:column;gap:7px}
+.bar-row{display:grid;grid-template-columns:62px 1fr 84px;align-items:center;gap:9px;font-size:12px}
+.bar-row .m{font-family:var(--font-num);color:var(--mut)}
+.bar-track{height:16px;background:var(--panel2);border-radius:4px;position:relative;overflow:hidden}
+.bar-zero{position:absolute;top:0;bottom:0;width:1px;background:var(--line)}
+.bar-fill{position:absolute;top:0;bottom:0;border-radius:3px}
+.bar-row .v{font-family:var(--font-num);text-align:right;font-variant-numeric:tabular-nums}
+.stats{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:11px 13px}
+.stat span{display:block;font-size:10px;letter-spacing:.12em;color:var(--mut)}
+.stat b{font-family:var(--font-num);font-size:20px;font-variant-numeric:tabular-nums}
+.tools{display:flex;gap:9px;flex-wrap:wrap;margin-top:8px}
+.tools button{flex:1;min-width:120px}
+
+/* ---- モーダル ---- */
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.72);display:flex;align-items:center;
+  justify-content:center;padding:16px;z-index:20}
+.modal[hidden]{display:none}
+.sheet{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+  padding:16px;width:100%;max-width:560px}
+.sheet h4{margin:0 0 10px;font-size:14px}
+.sheet textarea{font-family:var(--font-num);font-size:11px;min-height:180px;white-space:pre}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--panel2);
+  border:1px solid var(--line);color:var(--fg);padding:10px 18px;border-radius:99px;font-size:13px;z-index:30}
+.toast[hidden]{display:none}
+@media (max-width:420px){
+  .grid{grid-template-columns:1fr}
+  .f.half{grid-column:span 1}
+  .ctr-main{font-size:32px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- カウンター -->
+  <div class="counter">
+    <div class="counter-top">
+      <div>
+        <p class="ctr-label">トータル収支</p>
+        <div class="ctr-main" id="ctrMain">±0</div>
+      </div>
+      <div class="ctr-sub">
+        <div><span class="ctr-label">回数</span><b id="ctrCount">0</b></div>
+        <div><span class="ctr-label">勝率</span><b id="ctrRate">-</b></div>
+        <div><span class="ctr-label">平均</span><b id="ctrAvg">-</b></div>
+      </div>
+    </div>
+    <div class="range" id="rangeBtns">
+      <button data-r="m" aria-pressed="true">今月</button>
+      <button data-r="3m">直近3ヶ月</button>
+      <button data-r="y">今年</button>
+      <button data-r="all">全期間</button>
+    </div>
+    <canvas id="slump"></canvas>
+    <div class="slump-empty" id="slumpEmpty" hidden>記録するとスランプグラフが出ます</div>
+  </div>
+
+  <!-- タブ -->
+  <div class="tabs" role="tablist">
+    <button role="tab" aria-selected="true" data-tab="input">記録</button>
+    <button role="tab" aria-selected="false" data-tab="list">履歴</button>
+    <button role="tab" aria-selected="false" data-tab="stats">集計</button>
+  </div>
+
+  <!-- 記録 -->
+  <section id="tab-input">
+    <div class="grid">
+      <div class="f half"><label for="date">日付</label><input type="date" id="date"></div>
+      <div class="f half"><label>種別</label>
+        <div class="seg" id="kindSeg">
+          <button type="button" data-k="パチンコ" aria-pressed="true">パチンコ</button>
+          <button type="button" data-k="スロット" aria-pressed="false">スロット</button>
+        </div>
+      </div>
+      <div class="f wide"><label for="shop">店舗</label>
+        <input id="shop" list="shopList" placeholder="例：マルハン○○店" autocomplete="off">
+        <datalist id="shopList"></datalist>
+      </div>
+      <div class="f"><label for="model">機種</label>
+        <input id="model" list="modelList" placeholder="例：アイムジャグラーEX" autocomplete="off">
+        <datalist id="modelList"></datalist>
+      </div>
+      <div class="f"><label for="seat">台番号</label>
+        <input id="seat" inputmode="numeric" placeholder="任意"></div>
+      <div class="f"><label for="invest">投資（円）</label>
+        <input id="invest" type="number" inputmode="numeric" step="1000" min="0" placeholder="0"></div>
+      <div class="f"><label for="ret">回収（円）</label>
+        <input id="ret" type="number" inputmode="numeric" step="100" min="0" placeholder="0"></div>
+      <div class="calc"><span>収支</span><b id="calcNet">±0</b></div>
+      <div class="f"><label for="hours">遊技時間（h）</label>
+        <input id="hours" type="number" inputmode="decimal" step="0.5" min="0" placeholder="任意"></div>
+      <div class="f"><label for="games" id="gamesLabel">総回転数</label>
+        <input id="games" type="number" inputmode="numeric" step="100" min="0" placeholder="任意"></div>
+      <div class="f"><label for="hits">大当り回数</label>
+        <input id="hits" type="number" inputmode="numeric" min="0" placeholder="任意"></div>
+      <div class="f"><label for="setting">設定推測</label>
+        <select id="setting">
+          <option value="">—</option>
+          <option>1</option><option>2</option><option>3</option>
+          <option>4</option><option>5</option><option>6</option>
+        </select>
+      </div>
+      <div class="f wide"><label for="memo">メモ</label>
+        <textarea id="memo" placeholder="挙動、ヤメ時、次回への申し送りなど"></textarea></div>
+    </div>
+    <div class="actions">
+      <button class="btn" id="saveBtn">記録する</button>
+      <button class="btn ghost" id="cancelBtn" hidden>編集をやめる</button>
+    </div>
+  </section>
+
+  <!-- 履歴 -->
+  <section id="tab-list" hidden>
+    <div class="filters">
+      <select id="fShop"><option value="">すべての店舗</option></select>
+      <select id="fModel"><option value="">すべての機種</option></select>
+    </div>
+    <div id="listBody"></div>
+  </section>
+
+  <!-- 集計 -->
+  <section id="tab-stats" hidden>
+    <h3>サマリー</h3>
+    <div class="stats" id="statCards"></div>
+    <h3>月別収支</h3>
+    <div class="bars" id="monthBars"></div>
+    <h3>店舗別</h3>
+    <div id="shopTable"></div>
+    <h3>機種別</h3>
+    <div id="modelTable"></div>
+    <h3>データ</h3>
+    <div class="tools">
+      <button class="btn ghost" id="csvBtn">CSVで書き出す</button>
+      <button class="btn ghost" id="bkBtn">バックアップ</button>
+      <button class="btn ghost" id="rsBtn">復元</button>
+    </div>
+  </section>
+</div>
+
+<div class="modal" id="modal" hidden>
+  <div class="sheet">
+    <h4 id="modalTitle">データ</h4>
+    <textarea id="modalText"></textarea>
+    <div class="actions">
+      <button class="btn" id="modalOk">コピー</button>
+      <button class="btn ghost" id="modalClose">閉じる</button>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+(function(){
+"use strict";
+var KEY='pachi-shushi-v1';
+var recs=[], editId=null, kind='パチンコ', range='m';
+
+/* ---------- 保存（localStorageが使えない環境ではメモリ保持） ---------- */
+var persist=true;
+function load(){
+  try{ var s=localStorage.getItem(KEY); recs=s?JSON.parse(s):[]; }
+  catch(e){ persist=false; recs=[]; }
+  if(!Array.isArray(recs)) recs=[];
+}
+function save(){
+  try{ localStorage.setItem(KEY, JSON.stringify(recs)); }
+  catch(e){ persist=false; }
+}
+function $(id){ return document.getElementById(id); }
+function toast(msg){
+  var t=$('toast'); t.textContent=msg; t.hidden=false;
+  clearTimeout(toast._t); toast._t=setTimeout(function(){ t.hidden=true; },2200);
+}
+function yen(n){
+  var s=Math.abs(Math.round(n)).toLocaleString('ja-JP');
+  return (n>0?'+':n<0?'-':'±')+'¥'+s;
+}
+function cls(n){ return n>0?'win':n<0?'lose':''; }
+function num(v){ var n=parseFloat(v); return isFinite(n)?n:0; }
+
+/* ---------- 期間フィルタ ---------- */
+function inRange(r){
+  if(range==='all') return true;
+  var d=new Date(r.date+'T00:00:00'), now=new Date();
+  if(range==='m') return d.getFullYear()===now.getFullYear() && d.getMonth()===now.getMonth();
+  if(range==='y') return d.getFullYear()===now.getFullYear();
+  if(range==='3m'){ var f=new Date(now.getFullYear(), now.getMonth()-2, 1); return d>=f; }
+  return true;
+}
+function sorted(list){
+  return list.slice().sort(function(a,b){
+    return a.date===b.date ? (a.id-b.id) : (a.date<b.date?-1:1);
+  });
+}
+
+/* ---------- カウンター＋スランプグラフ ---------- */
+function renderCounter(){
+  var list=sorted(recs.filter(inRange));
+  var total=0, win=0;
+  list.forEach(function(r){ total+=r.net; if(r.net>0) win++; });
+  var main=$('ctrMain');
+  main.textContent=yen(total);
+  main.className='ctr-main '+cls(total);
+  $('ctrCount').textContent=list.length;
+  $('ctrRate').textContent=list.length?Math.round(win/list.length*100)+'%':'-';
+  $('ctrAvg').textContent=list.length?yen(total/list.length):'-';
+  drawSlump(list);
+}
+function drawSlump(list){
+  var cv=$('slump'), empty=$('slumpEmpty');
+  if(list.length<1){ cv.hidden=true; empty.hidden=false; return; }
+  cv.hidden=false; empty.hidden=true;
+  var dpr=window.devicePixelRatio||1;
+  var w=cv.clientWidth||300, h=120;
+  cv.width=w*dpr; cv.height=h*dpr;
+  var g=cv.getContext('2d');
+  g.setTransform(dpr,0,0,dpr,0,0);
+  g.clearRect(0,0,w,h);
+  var cum=[0], t=0;
+  list.forEach(function(r){ t+=r.net; cum.push(t); });
+  var max=Math.max.apply(null,cum), min=Math.min.apply(null,cum);
+  var pad=Math.max(1000,(max-min)*0.12);
+  max+=pad; min-=pad;
+  var pl=8, pr=8, pt=10, pb=10;
+  function X(i){ return pl+(w-pl-pr)*(cum.length<2?0.5:i/(cum.length-1)); }
+  function Y(v){ return pt+(h-pt-pb)*(1-(v-min)/(max-min||1)); }
+  var zy=Y(0);
+  g.strokeStyle='#2a383f'; g.lineWidth=1;
+  g.beginPath(); g.moveTo(0,zy+0.5); g.lineTo(w,zy+0.5); g.stroke();
+  g.beginPath(); g.moveTo(X(0),Y(cum[0]));
+  for(var i=1;i<cum.length;i++) g.lineTo(X(i),Y(cum[i]));
+  var end=cum[cum.length-1];
+  var color=end>0?'#35d39a':end<0?'#ff5a52':'#ffb020';
+  g.lineTo(X(cum.length-1),zy); g.lineTo(X(0),zy); g.closePath();
+  g.fillStyle=color+'22'; g.fill();
+  g.beginPath(); g.moveTo(X(0),Y(cum[0]));
+  for(var j=1;j<cum.length;j++) g.lineTo(X(j),Y(cum[j]));
+  g.strokeStyle=color; g.lineWidth=2; g.lineJoin='round'; g.stroke();
+  g.beginPath(); g.arc(X(cum.length-1),Y(end),3.5,0,Math.PI*2); g.fillStyle=color; g.fill();
+}
+
+/* ---------- 入力フォーム ---------- */
+function updateCalc(){
+  var n=num($('ret').value)-num($('invest').value);
+  var b=$('calcNet'); b.textContent=yen(n); b.className=cls(n);
+}
+function setKind(k){
+  kind=k;
+  [].forEach.call($('kindSeg').children,function(b){
+    b.setAttribute('aria-pressed', b.dataset.k===k?'true':'false');
+  });
+  $('gamesLabel').textContent = k==='スロット' ? '総ゲーム数' : '総回転数';
+}
+function resetForm(){
+  editId=null;
+  $('date').value=new Date().toISOString().slice(0,10);
+  ['shop','model','seat','invest','ret','hours','games','hits','memo'].forEach(function(id){ $(id).value=''; });
+  $('setting').value='';
+  setKind('パチンコ');
+  updateCalc();
+  $('saveBtn').textContent='記録する';
+  $('cancelBtn').hidden=true;
+}
+function fillForm(r){
+  editId=r.id;
+  $('date').value=r.date; setKind(r.kind);
+  $('shop').value=r.shop; $('model').value=r.model; $('seat').value=r.seat||'';
+  $('invest').value=r.invest; $('ret').value=r.ret;
+  $('hours').value=r.hours||''; $('games').value=r.games||'';
+  $('hits').value=r.hits||''; $('setting').value=r.setting||''; $('memo').value=r.memo||'';
+  updateCalc();
+  $('saveBtn').textContent='更新する';
+  $('cancelBtn').hidden=false;
+  showTab('input');
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+function saveRecord(){
+  var shop=$('shop').value.trim();
+  if(!shop){ toast('店舗を入れてください'); $('shop').focus(); return; }
+  var invest=num($('invest').value), ret=num($('ret').value);
+  var r={
+    id: editId||Date.now(),
+    date: $('date').value||new Date().toISOString().slice(0,10),
+    kind: kind, shop: shop, model: $('model').value.trim()||'（未記入）',
+    seat: $('seat').value.trim(), invest: invest, ret: ret, net: ret-invest,
+    hours: num($('hours').value), games: num($('games').value), hits: num($('hits').value),
+    setting: $('setting').value, memo: $('memo').value.trim()
+  };
+  if(editId){
+    for(var i=0;i<recs.length;i++) if(recs[i].id===editId){ recs[i]=r; break; }
+    toast('更新しました');
+  }else{ recs.push(r); toast(persist?'記録しました':'記録しました（この画面を閉じるまで保持）'); }
+  save(); resetForm(); renderAll();
+}
+
+/* ---------- 履歴 ---------- */
+function renderList(){
+  var body=$('listBody');
+  var fs=$('fShop').value, fm=$('fModel').value;
+  var list=sorted(recs.filter(inRange).filter(function(r){
+    return (!fs||r.shop===fs)&&(!fm||r.model===fm);
+  })).reverse();
+  if(!list.length){
+    body.innerHTML='<div class="empty">この条件の記録はまだありません</div>'; return;
+  }
+  body.innerHTML=list.map(function(r){
+    var meta=[];
+    if(r.games) meta.push((r.kind==='スロット'?'G':'回転')+' '+r.games.toLocaleString('ja-JP'));
+    if(r.hits) meta.push('大当り '+r.hits);
+    if(r.hours) meta.push(r.hours+'h');
+    if(r.hours) meta.push('時給 '+yen(r.net/r.hours));
+    if(r.setting) meta.push('設定推測 '+r.setting);
+    if(r.seat) meta.push('#'+esc(r.seat));
+    return '<div class="rec" data-id="'+r.id+'">'+
+      '<div class="rec-body">'+
+        '<div class="rec-head"><span class="rec-date">'+r.date.replace(/-/g,'/')+'</span>'+
+        '<span class="tag">'+r.kind+'</span></div>'+
+        '<div class="rec-shop">'+esc(r.shop)+'</div>'+
+        '<div class="rec-model">'+esc(r.model)+'</div>'+
+        (meta.length?'<div class="rec-meta">'+meta.join(' ・ ')+'</div>':'')+
+        (r.memo?'<div class="rec-memo">'+esc(r.memo)+'</div>':'')+
+        '<div class="rec-btns">'+
+          '<button class="mini" data-act="edit">編集</button>'+
+          '<button class="mini danger" data-act="del">削除</button>'+
+        '</div>'+
+      '</div>'+
+      '<div class="rec-amt '+cls(r.net)+'">'+yen(r.net)+
+        '<div class="rec-meta">投'+r.invest.toLocaleString('ja-JP')+' / 回'+r.ret.toLocaleString('ja-JP')+'</div>'+
+      '</div></div>';
+  }).join('');
+}
+function esc(s){
+  return String(s).replace(/[&<>"]/g,function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];
+  });
+}
+
+/* ---------- 集計 ---------- */
+function agg(list, keyfn){
+  var m={};
+  list.forEach(function(r){
+    var k=keyfn(r);
+    if(!m[k]) m[k]={key:k,n:0,net:0,win:0,hours:0,invest:0};
+    m[k].n++; m[k].net+=r.net; m[k].invest+=r.invest;
+    if(r.net>0) m[k].win++;
+    m[k].hours+=r.hours||0;
+  });
+  return Object.keys(m).map(function(k){ return m[k]; })
+    .sort(function(a,b){ return b.net-a.net; });
+}
+function tableHTML(rows){
+  if(!rows.length) return '<div class="empty">データがありません</div>';
+  return '<table><thead><tr><th>名称</th><th>回数</th><th>勝率</th><th>収支</th><th>平均</th><th>時給</th></tr></thead><tbody>'+
+    rows.map(function(a){
+      return '<tr><td>'+esc(a.key)+'</td>'+
+        '<td class="num">'+a.n+'</td>'+
+        '<td class="num">'+Math.round(a.win/a.n*100)+'%</td>'+
+        '<td class="num '+cls(a.net)+'">'+yen(a.net)+'</td>'+
+        '<td class="num '+cls(a.net)+'">'+yen(a.net/a.n)+'</td>'+
+        '<td class="num">'+(a.hours?yen(a.net/a.hours):'-')+'</td></tr>';
+    }).join('')+'</tbody></table>';
+}
+function renderStats(){
+  var list=recs.filter(inRange);
+  var total=0,inv=0,hrs=0,win=0,best=0,worst=0;
+  list.forEach(function(r){
+    total+=r.net; inv+=r.invest; hrs+=r.hours||0;
+    if(r.net>0)win++; if(r.net>best)best=r.net; if(r.net<worst)worst=r.net;
+  });
+  $('statCards').innerHTML=
+    card('総収支',yen(total),cls(total))+
+    card('総投資','¥'+inv.toLocaleString('ja-JP'),'')+
+    card('総稼働',hrs?hrs.toFixed(1)+'h':'-','')+
+    card('時給',hrs?yen(total/hrs):'-',cls(total))+
+    card('最高',yen(best),'win')+
+    card('最低',yen(worst),'lose');
+
+  // 月別
+  var m={};
+  list.forEach(function(r){
+    var k=r.date.slice(0,7);
+    m[k]=(m[k]||0)+r.net;
+  });
+  var keys=Object.keys(m).sort();
+  var mx=1;
+  keys.forEach(function(k){ mx=Math.max(mx,Math.abs(m[k])); });
+  $('monthBars').innerHTML = keys.length ? keys.map(function(k){
+    var v=m[k], p=Math.abs(v)/mx*50;
+    var style = v>=0
+      ? 'left:50%;width:'+p+'%;background:var(--win)'
+      : 'right:50%;width:'+p+'%;background:var(--lose)';
+    return '<div class="bar-row"><span class="m">'+k.replace('-','/')+'</span>'+
+      '<div class="bar-track"><div class="bar-zero" style="left:50%"></div>'+
+      '<div class="bar-fill" style="'+style+'"></div></div>'+
+      '<span class="v '+cls(v)+'">'+yen(v)+'</span></div>';
+  }).join('') : '<div class="empty">データがありません</div>';
+
+  $('shopTable').innerHTML=tableHTML(agg(list,function(r){return r.shop;}));
+  $('modelTable').innerHTML=tableHTML(agg(list,function(r){return r.model;}));
+}
+function card(label,val,c){
+  return '<div class="stat"><span>'+label+'</span><b class="'+c+'">'+val+'</b></div>';
+}
+
+/* ---------- 候補リスト・フィルタ ---------- */
+function renderOptions(){
+  var shops={},models={};
+  recs.forEach(function(r){ shops[r.shop]=1; models[r.model]=1; });
+  var sk=Object.keys(shops).sort(), mk=Object.keys(models).sort();
+  $('shopList').innerHTML=sk.map(function(s){return '<option value="'+esc(s)+'">';}).join('');
+  $('modelList').innerHTML=mk.map(function(s){return '<option value="'+esc(s)+'">';}).join('');
+  keepSelect($('fShop'),'すべての店舗',sk);
+  keepSelect($('fModel'),'すべての機種',mk);
+}
+function keepSelect(sel,first,keys){
+  var cur=sel.value;
+  sel.innerHTML='<option value="">'+first+'</option>'+
+    keys.map(function(k){return '<option value="'+esc(k)+'">'+esc(k)+'</option>';}).join('');
+  if(keys.indexOf(cur)>=0) sel.value=cur;
+}
+
+/* ---------- 書き出し・バックアップ ---------- */
+function openModal(title,text,okLabel,onOk){
+  $('modalTitle').textContent=title;
+  $('modalText').value=text;
+  $('modalOk').textContent=okLabel;
+  $('modal').hidden=false;
+  $('modalOk').onclick=onOk;
+}
+function toCSV(){
+  var head=['日付','種別','店舗','機種','台番号','投資','回収','収支','時間','回転数','大当り','設定推測','メモ'];
+  var rows=sorted(recs).map(function(r){
+    return [r.date,r.kind,r.shop,r.model,r.seat,r.invest,r.ret,r.net,r.hours,r.games,r.hits,r.setting,
+      (r.memo||'').replace(/\n/g,' ')].map(function(v){
+      var s=String(v==null?'':v);
+      return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;
+    }).join(',');
+  });
+  return head.join(',')+'\n'+rows.join('\n');
+}
+function download(name,text){
+  try{
+    var b=new Blob(['\ufeff'+text],{type:'text/plain;charset=utf-8'});
+    var a=document.createElement('a');
+    a.href=URL.createObjectURL(b); a.download=name;
+    document.body.appendChild(a); a.click();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); },1000);
+    toast('ダウンロードしました');
+  }catch(e){ toast('保存できませんでした。テキストをコピーしてください'); }
+}
+function copyText(t){
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(t).then(function(){toast('コピーしました');},function(){fallbackCopy();});
+  }else fallbackCopy();
+  function fallbackCopy(){
+    var ta=$('modalText'); ta.focus(); ta.select();
+    try{ document.execCommand('copy'); toast('コピーしました'); }
+    catch(e){ toast('長押しでコピーしてください'); }
+  }
+}
+
+/* ---------- タブ ---------- */
+function showTab(name){
+  ['input','list','stats'].forEach(function(t){
+    $('tab-'+t).hidden = (t!==name);
+  });
+  [].forEach.call(document.querySelectorAll('.tabs button'),function(b){
+    b.setAttribute('aria-selected', b.dataset.tab===name?'true':'false');
+  });
+}
+function renderAll(){ renderOptions(); renderCounter(); renderList(); renderStats(); }
+
+/* ---------- イベント ---------- */
+document.querySelector('.tabs').addEventListener('click',function(e){
+  var b=e.target.closest('button'); if(b) showTab(b.dataset.tab);
+});
+$('rangeBtns').addEventListener('click',function(e){
+  var b=e.target.closest('button'); if(!b) return;
+  range=b.dataset.r;
+  [].forEach.call(this.children,function(x){ x.setAttribute('aria-pressed', x===b?'true':'false'); });
+  renderAll();
+});
+$('kindSeg').addEventListener('click',function(e){
+  var b=e.target.closest('button'); if(b) setKind(b.dataset.k);
+});
+$('invest').addEventListener('input',updateCalc);
+$('ret').addEventListener('input',updateCalc);
+$('saveBtn').addEventListener('click',saveRecord);
+$('cancelBtn').addEventListener('click',function(){ resetForm(); toast('編集をやめました'); });
+$('fShop').addEventListener('change',renderList);
+$('fModel').addEventListener('change',renderList);
+
+$('listBody').addEventListener('click',function(e){
+  var btn=e.target.closest('button'); if(!btn) return;
+  var id=Number(btn.closest('.rec').dataset.id);
+  var r=null; recs.forEach(function(x){ if(x.id===id) r=x; });
+  if(!r) return;
+  if(btn.dataset.act==='edit'){ fillForm(r); return; }
+  if(btn.dataset.act==='del'){
+    if(btn.dataset.armed==='1'){
+      recs=recs.filter(function(x){ return x.id!==id; });
+      save(); renderAll(); toast('削除しました');
+    }else{
+      // 二段階の確認（confirm()はPWAで塞がれることがあるため使わない）
+      [].forEach.call(document.querySelectorAll('.mini.danger'),function(b){
+        b.dataset.armed=''; b.textContent='削除';
+      });
+      btn.dataset.armed='1'; btn.textContent='もう一度押すと削除';
+      setTimeout(function(){
+        if(btn.dataset.armed==='1'){ btn.dataset.armed=''; btn.textContent='削除'; }
+      },4000);
+    }
+  }
+});
+$('csvBtn').addEventListener('click',function(){
+  if(!recs.length){ toast('記録がありません'); return; }
+  var csv=toCSV();
+  openModal('CSV書き出し',csv,'コピー',function(){ copyText(csv); });
+  download('pachi-shushi-'+new Date().toISOString().slice(0,10)+'.csv',csv);
+});
+$('bkBtn').addEventListener('click',function(){
+  var json=JSON.stringify(recs);
+  openModal('バックアップ（このテキストを保管）',json,'コピー',function(){ copyText(json); });
+});
+$('rsBtn').addEventListener('click',function(){
+  openModal('復元（バックアップのテキストを貼り付け）','','この内容で上書きする',function(){
+    try{
+      var d=JSON.parse($('modalText').value);
+      if(!Array.isArray(d)) throw 0;
+      recs=d.map(function(r){ r.net=(r.net!=null)?r.net:(num(r.ret)-num(r.invest)); return r; });
+      save(); renderAll(); $('modal').hidden=true; toast('復元しました');
+    }catch(e){ toast('読み込めませんでした。テキストを確認してください'); }
+  });
+  $('modalText').value='';
+});
+$('modalClose').addEventListener('click',function(){ $('modal').hidden=true; });
+$('modal').addEventListener('click',function(e){ if(e.target===this) this.hidden=true; });
+window.addEventListener('resize',function(){ renderCounter(); });
+
+/* ---------- 起動 ---------- */
+load(); resetForm(); renderAll();
+if(!persist){
+  setTimeout(function(){ toast('この環境では保存が無効です（配信先では保存されます）'); },600);
+}
+})();
+</script>
+</body>
+</html>

@@ -128,6 +128,27 @@ tr.selrow td.rownum{background:#F6C6C0 !important}
 .snackmsg{flex:1;color:#fff;font-size:14px}
 .snack .pbtn.undo{background:#FFD54F;border-color:#FFD54F;color:#333}
 
+/* ===== 音声入力 ===== */
+.voicepad{
+  display:none;position:fixed;left:0;right:0;bottom:0;z-index:85;
+  background:#F7F7F2;border-top:3px solid #1D5FA8;
+  padding:8px 12px 16px;box-shadow:0 -4px 16px rgba(0,0,0,.25);
+}
+.voicepad.show{display:block}
+.voice-disp{
+  background:#fff;border:1px solid #BBB;border-radius:8px;padding:12px;
+  text-align:center;font-size:15px;color:#555;min-height:50px;
+}
+.voice-heard{
+  text-align:center;font-size:13px;color:#1D5FA8;min-height:20px;margin:6px 0;font-weight:600;
+}
+.voice-mic{
+  width:100%;padding:16px;border:none;border-radius:12px;
+  background:#1D5FA8;color:#fff;font-size:18px;font-weight:700;margin-bottom:4px;
+}
+.voice-mic.listening{background:#C0392B;animation:vpulse 1.2s infinite}
+@keyframes vpulse{0%,100%{opacity:1}50%{opacity:.65}}
+
 /* ===== 電卓 ===== */
 .calcpad{
   display:none;position:fixed;left:0;right:0;bottom:0;z-index:80;
@@ -222,7 +243,7 @@ td.adjv{font-weight:700}
   header h1{color:#000;font-size:18px}
   header input{background:transparent;color:#000;border:none;font-size:15px}
   header input::placeholder{color:transparent}
-  .tabs,.toolbar,.btn,.projbar,.ovl,.insbtn,.selbar,.snack,.calcpad{display:none !important}
+  .tabs,.toolbar,.btn,.projbar,.ovl,.insbtn,.selbar,.snack,.calcpad,.voicepad{display:none !important}
   .panel{display:block !important}
   .tablewrap{overflow:visible}
   table{min-width:0;width:100%}
@@ -403,6 +424,18 @@ td.adjv{font-weight:700}
   </div>
 </div>
 
+<!-- 音声入力パネル -->
+<div class="voicepad" id="voicepad">
+  <div class="calc-head">
+    <span id="voiceTarget" class="calc-target"></span>
+    <button class="calc-x" onclick="stopVoice()">✕</button>
+  </div>
+  <div class="voice-disp" id="voiceDisp">マイクを押して話してください</div>
+  <div class="voice-heard" id="voiceHeard"></div>
+  <button class="voice-mic" id="voiceMic" onclick="toggleVoice()">🎤 話す</button>
+  <div class="calc-hint" id="voiceHint">例:「いち てん ごー まる まる」「1.500」／ 続けて話すと次の行に入ります</div>
+</div>
+
 <!-- 電卓 -->
 <div class="calcpad" id="calcpad">
   <div class="calc-head">
@@ -449,6 +482,13 @@ td.adjv{font-weight:700}
       </thead>
       <tbody id="tb"></tbody>
     </table>
+  </div>
+  <div class="toolbar">
+    <span class="unit">音声で入力</span>
+    <button class="btn" onclick="startVoice('bs')">🎤 BS</button>
+    <button class="btn" onclick="startVoice('fs')">🎤 FS</button>
+    <button class="btn" onclick="startVoice('plan')">🎤 計画高</button>
+    <button class="btn" onclick="startVoice('name')">🎤 測点名</button>
   </div>
   <div class="toolbar">
     <span class="unit">単位:メートル(m)</span>
@@ -853,6 +893,160 @@ function pasteAll(planOnly){
   closeDlg("pasteAllDlg");
   render(); calc(); saveStore();
   showSnack(planOnly? "測点・計画高を貼り付けました" : "野帳をすべて貼り付けました");
+}
+
+/* ===== 音声入力 ===== */
+let rec=null, listening=false, voiceCol=null, voiceRow=null;
+const VCOLNAME={fs:"FS(前視)",plan:"計画高",bs:"BS(後視)",name:"測点名"};
+// 測点名の聞き取り結果を整形
+function parsePointName(text){
+  let t=String(text).trim()
+    .replace(/[０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0))
+    .replace(/[、。\s]/g,"");
+  if(t==="") return null;
+  // 「ナンバー3」「ナンバースリー」「No3」→ No.3
+  t=t.replace(/ナンバー|なんばー|ﾅﾝﾊﾞｰ|number|Number|NO|no|Ｎｏ/gi,"No.");
+  t=t.replace(/ゼロ|ぜろ/g,"0").replace(/ワン|わん/g,"1").replace(/ツー|つー/g,"2")
+     .replace(/スリー|すりー/g,"3").replace(/フォー|ふぉー/g,"4").replace(/ファイブ|ふぁいぶ/g,"5")
+     .replace(/シックス|しっくす/g,"6").replace(/セブン|せぶん/g,"7")
+     .replace(/エイト|えいと/g,"8").replace(/ナイン|ないん/g,"9");
+  t=t.replace(/No\.\./g,"No.").replace(/No(\d)/g,"No.$1");
+  // 「ケービーエム」「けーびーえむ」→ KBM
+  t=t.replace(/ケービーエム|けーびーえむ|KBM|kbm/gi,"KBM");
+  t=t.replace(/ビーエム|びーえむ/gi,"BM");
+  // プラス杭「No.3プラス5」→ No.3+5
+  t=t.replace(/プラス|ぷらす/g,"+");
+  return t;
+}
+// 日本語の読み上げを数値に変換
+const KANA_DIGIT={
+  "ゼロ":"0","れい":"0","レイ":"0","まる":"0","マル":"0","0":"0",
+  "いち":"1","イチ":"1","ひと":"1","1":"1",
+  "に":"2","ニ":"2","2":"2",
+  "さん":"3","サン":"3","3":"3",
+  "よん":"4","ヨン":"4","し":"4","4":"4",
+  "ご":"5","ゴ":"5","5":"5",
+  "ろく":"6","ロク":"6","6":"6",
+  "なな":"7","ナナ":"7","しち":"7","7":"7",
+  "はち":"8","ハチ":"8","8":"8",
+  "きゅう":"9","キュウ":"9","く":"9","9":"9"
+};
+function parseNumber(text){
+  let t=String(text).trim();
+  // 全角→半角、不要語の除去
+  t=t.replace(/[０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0))
+     .replace(/[．。・]/g,".")
+     .replace(/[、\s]/g,"")
+     .replace(/メートル|ミリ|めーとる|センチ/g,"");
+  // 素直に数値として読めるか
+  let m=t.match(/-?\d+(\.\d+)?/);
+  if(m && /^\D{0,2}-?\d/.test(t)) return parseFloat(m[0]);
+  let s=t.replace(/てん|テン|点/g,".");
+  // 整数部の「じゅう/ひゃく」などの漢数読みを数字化
+  s=s.replace(/ひゃく|ヒャク|百/g,"100").replace(/じゅう|ジュウ|十/g,"10");
+  let out="",i=0;
+  while(i<s.length){
+    if(s[i]==="."){ out+="."; i++; continue; }
+    let hit=null;
+    for(const k of Object.keys(KANA_DIGIT).sort((a,b)=>b.length-a.length)){
+      if(s.startsWith(k,i)){ hit=k; break; }
+    }
+    if(hit){ out+=KANA_DIGIT[hit]; i+=hit.length; }
+    else{ i++; }
+  }
+  if(out===""||out===".") return null;
+  const v=parseFloat(out);
+  return isFinite(v)? v : null;
+}
+function startVoice(col){
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){ showSnack("この端末では音声入力が使えません"); return; }
+  voiceCol=col;
+  voiceRow = (col==="plan"||col==="fs")? 1 : 0; // 計画高・FSはKBM行が対象外
+  closeCalc();
+  document.getElementById("voicepad").classList.add("show");
+  updateVoiceTarget();
+  document.getElementById("voiceDisp").textContent="マイクを押して話してください";
+  document.getElementById("voiceHeard").textContent="";
+  document.getElementById("voiceHint").textContent = (col==="name")
+    ? "例:「ケービーエム」「ナンバー3」「ナンバー3 プラス 5」／ 続けて話すと次の行に入ります"
+    : "例:「いち てん ごー まる まる」「1.500」／ 続けて話すと次の行に入ります";
+}
+function updateVoiceTarget(){
+  document.getElementById("voiceTarget").textContent=
+    (VCOLNAME[voiceCol]||voiceCol)+" を音声入力 → "+(rows[voiceRow]?(rows[voiceRow].name||("行"+(voiceRow+1))):"");
+  document.querySelectorAll("#tb tr").forEach((tr,i)=>{
+    tr.style.background = (i===voiceRow)? "#E3F0FB" : "";
+  });
+}
+function toggleVoice(){ listening? stopListen() : startListen(); }
+function startListen(){
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR) return;
+  rec=new SR();
+  rec.lang="ja-JP";
+  rec.continuous=true;
+  rec.interimResults=true;
+  rec.onresult=e=>{
+    for(let i=e.resultIndex;i<e.results.length;i++){
+      const txt=e.results[i][0].transcript;
+      document.getElementById("voiceHeard").textContent="「"+txt+"」";
+      if(e.results[i].isFinal){
+        if(voiceCol==="name"){
+          const nm=parsePointName(txt);
+          if(nm){ applyVoice(nm); }
+          else{ document.getElementById("voiceDisp").textContent="聞き取れませんでした"; }
+        }else{
+          const v=parseNumber(txt);
+          if(v!=null){ applyVoice(v); }
+          else{ document.getElementById("voiceDisp").textContent="数値として聞き取れませんでした"; }
+        }
+      }
+    }
+  };
+  rec.onerror=ev=>{
+    listening=false; setMicUI();
+    document.getElementById("voiceDisp").textContent =
+      (ev.error==="not-allowed")? "マイクの使用を許可してください" : "認識できませんでした。もう一度お試しください";
+  };
+  rec.onend=()=>{ if(listening){ try{rec.start();}catch(e){} } };
+  try{ rec.start(); listening=true; setMicUI();
+    document.getElementById("voiceDisp").textContent="聞き取り中…数値を話してください";
+  }catch(e){ showSnack("マイクを起動できませんでした"); }
+}
+function stopListen(){
+  listening=false;
+  if(rec){ try{rec.stop();}catch(e){} }
+  setMicUI();
+  document.getElementById("voiceDisp").textContent="停止しました";
+}
+function setMicUI(){
+  const b=document.getElementById("voiceMic");
+  b.classList.toggle("listening",listening);
+  b.textContent=listening? "■ 停止" : "🎤 話す";
+}
+function applyVoice(v){
+  if(voiceRow>=rows.length) addRows(5);
+  syncCur();
+  undoStack.push(JSON.stringify(store));
+  if(undoStack.length>20) undoStack.shift();
+  redoStack=[];
+  const val = (voiceCol==="name")? String(v) : (Math.round(v*1000)/1000).toFixed(3);
+  rows[voiceRow][voiceCol]=val;
+  document.getElementById("voiceDisp").innerHTML=
+    (voiceCol==="name")
+      ? `<b style="font-size:20px;color:#1D5FA8">${(voiceRow+1)}行目 : ${val}</b>`
+      : `<b style="font-size:20px;color:#1D5FA8">${(rows[voiceRow].name||"")} : ${val}</b>`;
+  voiceRow++;
+  if(voiceRow>=rows.length) addRows(5);
+  render(); calc(); saveStore();
+  updateVoiceTarget();
+}
+function stopVoice(){
+  stopListen();
+  document.getElementById("voicepad").classList.remove("show");
+  document.querySelectorAll("#tb tr").forEach(tr=>tr.style.background="");
+  voiceCol=null;
 }
 
 /* ===== PWA(アプリとしてインストール・オフライン動作) ===== */

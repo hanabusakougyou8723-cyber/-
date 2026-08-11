@@ -939,8 +939,10 @@ function parsePointName(text){
   // 「ケービーエム」「けーびーえむ」→ KBM
   t=t.replace(/ケービーエム|けーびーえむ|KBM|kbm/gi,"KBM");
   t=t.replace(/ビーエム|びーえむ/gi,"BM");
-  // プラス杭「No.3プラス5」→ No.3+5
-  t=t.replace(/プラス|ぷらす/g,"+");
+  // プラス杭「No.3プラス5」「ナンバー3プラ5」→ No.3+5
+  t=t.replace(/プラス|ぷらす|プラっす/g,"+");
+  t=t.replace(/プラ|ぷら|ﾌﾟﾗ/g,"+");
+  t=t.replace(/\+\+/g,"+");
   return t;
 }
 // 日本語の読み上げを数値に変換

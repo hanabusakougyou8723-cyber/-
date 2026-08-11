@@ -155,10 +155,16 @@ tr.selrow td.rownum{background:#F6C6C0 !important}
 .voice-heard{
   text-align:center;font-size:13px;color:#1D5FA8;min-height:20px;margin:6px 0;font-weight:600;
 }
+.voice-act{display:flex;gap:8px;margin-bottom:4px}
 .voice-mic{
-  width:100%;padding:16px;border:none;border-radius:12px;
-  background:#1D5FA8;color:#fff;font-size:18px;font-weight:700;margin-bottom:4px;
+  flex:1;padding:16px 0;border:none;border-radius:12px;
+  background:#1D5FA8;color:#fff;font-size:17px;font-weight:700;
 }
+.voice-ok{
+  flex:1;padding:16px 0;border:none;border-radius:12px;
+  background:var(--green-d);color:#fff;font-size:16px;font-weight:700;
+}
+.voice-ok:disabled{background:#C5CBC5;color:#EEE}
 .voice-mic.listening{background:#C0392B;animation:vpulse 1.2s infinite}
 @keyframes vpulse{0%,100%{opacity:1}50%{opacity:.65}}
 
@@ -457,8 +463,11 @@ td.adjv{font-weight:700}
   </div>
   <div class="voice-disp" id="voiceDisp">マイクを押して話してください</div>
   <div class="voice-heard" id="voiceHeard"></div>
-  <button class="voice-mic" id="voiceMic" onclick="toggleVoice()">🎤 話す</button>
-  <div class="calc-hint" id="voiceHint">例:「いち てん ごー まる まる」「1.500」／ 続けて話すと次の行に入ります</div>
+  <div class="voice-act">
+    <button class="voice-mic" id="voiceMic" onclick="toggleVoice()">🎤 話す</button>
+    <button class="voice-ok" id="voiceOk" onclick="confirmVoice()" disabled>✓ 確定して次へ</button>
+  </div>
+  <div class="calc-hint" id="voiceHint">例:「いち てん ごー まる まる」「1.500」／ 聞き取り後、確定ボタンで入力されます</div>
 </div>
 
 <!-- 電卓 -->
@@ -921,7 +930,7 @@ function pasteAll(planOnly){
 }
 
 /* ===== 音声入力 ===== */
-let rec=null, listening=false, voiceCol=null, voiceRow=null;
+let rec=null, listening=false, voiceCol=null, voiceRow=null, pendingVal=null;
 const VCOLNAME={fs:"FS(前視)",plan:"計画高",bs:"BS(後視)",name:"測点名"};
 // 測点名の聞き取り結果を整形
 function parsePointName(text){
@@ -998,8 +1007,10 @@ function startVoice(col){
   document.getElementById("voiceDisp").textContent="マイクを押して話してください";
   document.getElementById("voiceHeard").textContent="";
   document.getElementById("voiceHint").textContent = (col==="name")
-    ? "例:「ケービーエム」「ナンバー3」「ナンバー3 プラス 5」／ 続けて話すと次の行に入ります"
-    : "例:「いち てん ごー まる まる」「1.500」／ 続けて話すと次の行に入ります";
+    ? "例:「ケービーエム」「ナンバー3 プラ 5」／ 聞き取り後、確定ボタンで入力されます"
+    : "例:「いち てん ごー まる まる」「1.500」／ 聞き取り後、確定ボタンで入力されます";
+  pendingVal=null;
+  document.getElementById("voiceOk").disabled=true;
 }
 function updateVoiceTarget(){
   document.getElementById("voiceTarget").textContent=
@@ -1021,6 +1032,9 @@ function updateVoiceTarget(){
 }
 function setVoiceRow(v){
   voiceRow=parseInt(v,10);
+  pendingVal=null;
+  const ok=document.getElementById("voiceOk");
+  if(ok) ok.disabled=true;
   updateVoiceTarget();
   // 対象の行が画面に見えるようスクロール
   const tr=document.querySelectorAll("#tb tr")[voiceRow];
@@ -1040,8 +1054,8 @@ function changeVoiceCol(col){
   const min=(col==="plan"||col==="fs")? 1 : 0;
   if(voiceRow<min) voiceRow=min;
   document.getElementById("voiceHint").textContent = (col==="name")
-    ? "例:「ケービーエム」「ナンバー3」「ナンバー3 プラス 5」／ 続けて話すと次の行に入ります"
-    : "例:「いち てん ごー まる まる」「1.500」／ 続けて話すと次の行に入ります";
+    ? "例:「ケービーエム」「ナンバー3 プラ 5」／ 聞き取り後、確定ボタンで入力されます"
+    : "例:「いち てん ごー まる まる」「1.500」／ 聞き取り後、確定ボタンで入力されます";
   updateVoiceTarget();
 }
 function toggleVoice(){ listening? stopListen() : startListen(); }
@@ -1059,11 +1073,11 @@ function startListen(){
       if(e.results[i].isFinal){
         if(voiceCol==="name"){
           const nm=parsePointName(txt);
-          if(nm){ applyVoice(nm); }
+          if(nm){ pendVoice(nm); }
           else{ document.getElementById("voiceDisp").textContent="聞き取れませんでした"; }
         }else{
           const v=parseNumber(txt);
-          if(v!=null){ applyVoice(v); }
+          if(v!=null){ pendVoice(v); }
           else{ document.getElementById("voiceDisp").textContent="数値として聞き取れませんでした"; }
         }
       }
@@ -1090,22 +1104,37 @@ function setMicUI(){
   b.classList.toggle("listening",listening);
   b.textContent=listening? "■ 停止" : "🎤 話す";
 }
+// 聞き取った値を保留(まだセルには入れない)
+function pendVoice(v){
+  pendingVal = (voiceCol==="name")? String(v) : (Math.round(v*1000)/1000).toFixed(3);
+  const nm = rows[voiceRow]? (rows[voiceRow].name||("行"+(voiceRow+1))) : "";
+  document.getElementById("voiceDisp").innerHTML=
+    `<div style="font-size:12px;color:#777">${nm} の ${VCOLNAME[voiceCol]||voiceCol}</div>
+     <b style="font-size:26px;color:#1D5FA8">${pendingVal}</b>
+     <div style="font-size:12px;color:#777">確定ボタンで入力／言い直しも可</div>`;
+  document.getElementById("voiceOk").disabled=false;
+}
+function confirmVoice(){
+  if(pendingVal==null) return;
+  applyVoice(pendingVal);
+  pendingVal=null;
+  document.getElementById("voiceOk").disabled=true;
+}
 function applyVoice(v){
   if(voiceRow>=rows.length) addRows(5);
   syncCur();
   undoStack.push(JSON.stringify(store));
   if(undoStack.length>20) undoStack.shift();
   redoStack=[];
-  const val = (voiceCol==="name")? String(v) : (Math.round(v*1000)/1000).toFixed(3);
-  rows[voiceRow][voiceCol]=val;
-  document.getElementById("voiceDisp").innerHTML=
-    (voiceCol==="name")
-      ? `<b style="font-size:20px;color:#1D5FA8">${(voiceRow+1)}行目 : ${val}</b>`
-      : `<b style="font-size:20px;color:#1D5FA8">${(rows[voiceRow].name||"")} : ${val}</b>`;
+  rows[voiceRow][voiceCol]=String(v);
   voiceRow++;
   if(voiceRow>=rows.length) addRows(5);
   render(); calc(); saveStore();
   updateVoiceTarget();
+  document.getElementById("voiceDisp").innerHTML=
+    `<span style="color:var(--green-d);font-weight:700">✓ ${v} を入力しました</span><br>
+     <span style="font-size:13px;color:#777">次:${rows[voiceRow]?(rows[voiceRow].name||("行"+(voiceRow+1))):""}</span>`;
+  document.getElementById("voiceHeard").textContent="";
   const tr=document.querySelectorAll("#tb tr")[voiceRow];
   if(tr) tr.scrollIntoView({block:"center",behavior:"smooth"});
 }

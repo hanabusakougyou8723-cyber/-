@@ -9,8 +9,9 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="野帳">
-<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='36' fill='%236B9E6F'/%3E%3Crect x='30' y='42' width='132' height='108' rx='6' fill='%23FBFAF4'/%3E%3Cg stroke='%236B9E6F' stroke-width='4'%3E%3Cline x1='30' y1='70' x2='162' y2='70'/%3E%3Cline x1='30' y1='97' x2='162' y2='97'/%3E%3Cline x1='30' y1='124' x2='162' y2='124'/%3E%3Cline x1='63' y1='42' x2='63' y2='150'/%3E%3Cline x1='96' y1='42' x2='96' y2='150'/%3E%3Cline x1='129' y1='42' x2='129' y2='150'/%3E%3C/g%3E%3C/svg%3E">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='36' fill='%236B9E6F'/%3E%3Crect x='30' y='42' width='132' height='108' rx='6' fill='%23FBFAF4'/%3E%3Cg stroke='%236B9E6F' stroke-width='4'%3E%3Cline x1='30' y1='70' x2='162' y2='70'/%3E%3Cline x1='30' y1='97' x2='162' y2='97'/%3E%3Cline x1='30' y1='124' x2='162' y2='124'/%3E%3Cline x1='63' y1='42' x2='63' y2='150'/%3E%3Cline x1='96' y1='42' x2='96' y2='150'/%3E%3Cline x1='129' y1='42' x2='129' y2='150'/%3E%3C/g%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
+<link rel="manifest" href="manifest.json">
 <style>
 :root{
   --green:#6B9E6F;
@@ -544,6 +545,7 @@ td.adjv{font-weight:700}
   <div class="toolbar">
     <span class="unit">全工事のバックアップ</span>
     <button class="btn" id="installBtn" style="display:none" onclick="installApp()">📲 アプリ追加</button>
+    <button class="btn" onclick="checkOffline()">📶 オフライン確認</button>
     <button class="btn" onclick="exportBackup()">書き出し</button>
     <button class="btn" onclick="document.getElementById('importFile').click()">読み込み</button>
     <input type="file" id="importFile" accept=".json,application/json" style="display:none" onchange="importBackup(this)">
@@ -1148,41 +1150,25 @@ function stopVoice(){
 
 /* ===== PWA(アプリとしてインストール・オフライン動作) ===== */
 (function(){
-  const ICON = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='36' fill='%236B9E6F'/%3E%3Crect x='30' y='42' width='132' height='108' rx='6' fill='%23FBFAF4'/%3E%3Cg stroke='%236B9E6F' stroke-width='4'%3E%3Cline x1='30' y1='70' x2='162' y2='70'/%3E%3Cline x1='30' y1='97' x2='162' y2='97'/%3E%3Cline x1='30' y1='124' x2='162' y2='124'/%3E%3Cline x1='63' y1='42' x2='63' y2='150'/%3E%3Cline x1='96' y1='42' x2='96' y2='150'/%3E%3Cline x1='129' y1='42' x2='129' y2='150'/%3E%3C/g%3E%3C/svg%3E";
-  const here = location.pathname;
-  const manifest = {
-    name:"水準測量野帳", short_name:"野帳",
-    start_url: here, scope: here,
-    display:"standalone", orientation:"any",
-    background_color:"#F2F2EE", theme_color:"#6B9E6F",
-    icons:[
-      {src:ICON, sizes:"192x192", type:"image/svg+xml", purpose:"any"},
-      {src:ICON, sizes:"512x512", type:"image/svg+xml", purpose:"any maskable"}
-    ]
-  };
-  const mLink=document.createElement("link");
-  mLink.rel="manifest";
-  mLink.href=URL.createObjectURL(new Blob([JSON.stringify(manifest)],{type:"application/manifest+json"}));
-  document.head.appendChild(mLink);
-
-  // オフライン用Service Worker(ページ自身をキャッシュ)
-  if("serviceWorker" in navigator && location.protocol==="https:"){
-    const swCode = `
-const C="yacho-v1";
-self.addEventListener("install",e=>{self.skipWaiting();});
-self.addEventListener("activate",e=>{e.waitUntil(self.clients.claim());});
-self.addEventListener("fetch",e=>{
-  if(e.request.method!=="GET") return;
-  e.respondWith(
-    fetch(e.request).then(r=>{
-      const cp=r.clone();
-      caches.open(C).then(c=>c.put(e.request,cp));
-      return r;
-    }).catch(()=>caches.match(e.request).then(r=>r||caches.match(${JSON.stringify(here)})))
-  );
-});`;
-    const swUrl=URL.createObjectURL(new Blob([swCode],{type:"text/javascript"}));
-    navigator.serviceWorker.register(swUrl,{scope:here}).catch(()=>{});
+  // Service Worker は同一オリジンの実ファイル(sw.js)から登録する
+  // ※blob URL からの登録はブラウザ仕様で禁止されているため不可
+  if("serviceWorker" in navigator && window.isSecureContext){
+    window.addEventListener("load",()=>{
+      navigator.serviceWorker.register("sw.js")
+        .then(reg=>{
+          window.__swReady=true;
+          reg.addEventListener("updatefound",()=>{
+            const nw=reg.installing;
+            if(!nw) return;
+            nw.addEventListener("statechange",()=>{
+              if(nw.state==="installed" && navigator.serviceWorker.controller){
+                if(typeof showSnack==="function") showSnack("新しいバージョンがあります(閉じて開き直すと更新)");
+              }
+            });
+          });
+        })
+        .catch(err=>{ window.__swError=String(err); });
+    });
   }
 
   // インストールボタン
@@ -1204,6 +1190,26 @@ self.addEventListener("fetch",e=>{
   window.addEventListener("appinstalled",()=>{
     const b=document.getElementById("installBtn"); if(b) b.style.display="none";
   });
+
+  // オフライン対応の状態確認
+  window.checkOffline=function(){
+    if(location.protocol==="file:"){
+      showSnack("ファイルを直接開いています。GitHubのURLから開いてください"); return;
+    }
+    if(!("serviceWorker" in navigator)){ showSnack("この端末は非対応です"); return; }
+    navigator.serviceWorker.getRegistration().then(reg=>{
+      if(reg && navigator.serviceWorker.controller){
+        caches.has("yacho-v4").then(ok=>{
+          showSnack(ok? "✓ オフライン対応ずみ(電波が無くても起動します)"
+                      : "準備中です。数秒後にもう一度お試しください");
+        });
+      }else if(reg){
+        showSnack("準備中です。一度閉じて開き直してください");
+      }else{
+        showSnack("オフライン未対応"+(window.__swError? "："+window.__swError : "。ページを再読み込みしてください"));
+      }
+    });
+  };
 })();
 
 /* ===== バックアップ ===== */

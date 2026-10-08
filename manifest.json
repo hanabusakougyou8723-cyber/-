@@ -1,0 +1,17 @@
+{
+  "name": "水準測量野帳",
+  "short_name": "野帳",
+  "description": "水準測量の野帳・計画高の読み逆算・誤差補正計算",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#F2F2EE",
+  "theme_color": "#6B9E6F",
+  "lang": "ja",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

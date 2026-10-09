@@ -1,1662 +1,344 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ja">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>野帳 ─ 水準測量</title>
-<meta name="theme-color" content="#6B9E6F">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="野帳">
-<link rel="apple-touch-icon" href="icon-192.png">
-<link rel="icon" href="icon-192.png">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0d1319">
+<title>ヘロン求積</title>
 <link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
 <style>
-:root{
-  --green:#6B9E6F;
-  --green-d:#5A8C5E;
-  --head:#E4D5B5;      /* 列見出しのベージュ */
-  --rownum:#E7F0E4;    /* 測点列の薄緑 */
-  --calc:#A020F0;      /* 計算値の紫 */
-  --ink:#222;
-  --line:#555;
-  --paper:#fff;
-  --mono:"SF Mono","Roboto Mono",Consolas,monospace;
-}
-*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-body{
-  font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;
-  background:#F2F2EE;color:var(--ink);font-size:15px;padding-bottom:110px;
-}
-header{
-  background:var(--green);color:#fff;padding:14px 14px;
-  display:flex;align-items:center;gap:12px;
-  position:sticky;top:0;z-index:30;
-}
-header h1{font-size:22px;font-weight:700;letter-spacing:.4em;flex-shrink:0}
-header input{
-  flex:1;border:none;background:rgba(255,255,255,.15);border-radius:8px;
-  color:#fff;font-size:17px;padding:8px 10px;min-width:0;
-}
-header input::placeholder{color:rgba(255,255,255,.6)}
-.projbar{
-  background:#EFF3EC;border-bottom:1px solid #CCC;
-  padding:8px 12px;display:flex;gap:8px;align-items:center;
-}
-.projbar.datebar{background:#E7EEE3}
-.plabel{font-size:12px;font-weight:700;color:var(--green-d);flex-shrink:0;width:28px}
-.projbar select{
-  flex:1;min-width:0;padding:9px 8px;border:1px solid #BBB;border-radius:8px;
-  font-size:15px;background:#fff;
-}
-.pbtn{
-  padding:9px 12px;border:1.5px solid var(--green-d);border-radius:8px;
-  background:#fff;color:var(--green-d);font-size:13px;font-weight:700;flex-shrink:0;
-}
-.pbtn.danger{border-color:#C0392B;color:#C0392B}
-.pbtn.primary{background:var(--green-d);color:#fff}
-.ovl{
-  display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);
-  z-index:100;align-items:center;justify-content:center;padding:20px;
-}
-.ovl.show{display:flex}
-.dlg{
-  background:#fff;border-radius:14px;padding:18px 16px;width:100%;max-width:340px;
-  box-shadow:0 8px 30px rgba(0,0,0,.3);
-}
-.dlg h3{font-size:16px;margin-bottom:12px;color:var(--green-d)}
-.dlg input{
-  width:100%;padding:11px 10px;border:1px solid #BBB;border-radius:8px;font-size:16px;
-  margin-bottom:14px;
-}
-.dlg-btns{display:flex;gap:8px;justify-content:flex-end;margin-top:6px}
-.dlg-btns .pbtn{padding:11px 18px}
-.dlg-btns .pbtn.danger{background:#C0392B;color:#fff}
-.tabs{display:flex;background:var(--green-d);position:sticky;top:58px;z-index:29}
-.tabs button{
-  flex:1;padding:11px 0;border:none;background:transparent;color:rgba(255,255,255,.65);
-  font-size:14px;font-weight:700;letter-spacing:.1em;border-bottom:3px solid transparent;
-}
-.tabs button.on{color:#fff;border-bottom-color:#fff}
-.panel{display:none}.panel.on{display:block}
-
-/* ===== 野帳テーブル ===== */
-.tablewrap{overflow-x:auto;background:var(--paper);-webkit-overflow-scrolling:touch}
-table{border-collapse:collapse;width:100%;min-width:582px}
-th{
-  background:var(--head);border:1px solid var(--line);
-  padding:6px 2px;font-size:16px;font-weight:700;line-height:1.2;
-}
-th small{display:block;font-size:11px;font-weight:600;color:#444}
-th.plan-th{background:#D9E4D0}
-td{
-  border:1px solid var(--line);height:56px;padding:0;
-  font-family:var(--mono);font-size:15px;
-}
-td.rownum{
-  background:var(--rownum);text-align:center;font-family:inherit;
-  font-size:17px;min-width:64px;width:64px;
-  position:sticky;left:0;z-index:2;border-right:2px solid var(--line);
-}
-td.rownum input.ptname{
-  width:100%;height:56px;border:none;background:transparent;
-  font-family:inherit;font-size:14px;font-weight:600;text-align:center;
-  padding:0 2px;color:var(--ink);
-}
-td.rownum input.ptname:focus{outline:none;background:#FFF9DE}
-/* ===== 行選択モード ===== */
-tbody.selmode input{pointer-events:none}
-tbody.selmode td.rownum{cursor:pointer}
-tr.selrow td{background:#FDE3E0 !important}
-tr.selrow td.rownum{background:#F6C6C0 !important}
-.selbar{
-  display:none;position:fixed;left:0;right:0;bottom:0;z-index:60;
-  background:var(--green-d);padding:12px;gap:10px;align-items:center;
-  box-shadow:0 -3px 10px rgba(0,0,0,.25);
-}
-.selbar.show{display:flex}
-.selcount{flex:1;color:#fff;font-size:15px;font-weight:700}
-.selbar .pbtn{background:#fff}
-.selbar .pbtn.selins{background:#fff;border-color:#fff;color:var(--green-d)}
-.selbar .pbtn.seldel{background:#C0392B;border-color:#C0392B;color:#fff}
-.snack{
-  display:none;position:fixed;left:12px;right:12px;bottom:14px;z-index:70;
-  background:#333;border-radius:12px;padding:10px 12px;
-  gap:10px;align-items:center;box-shadow:0 4px 14px rgba(0,0,0,.35);
-}
-.snack.show{display:flex}
-.snackmsg{flex:1;color:#fff;font-size:14px}
-.snack .pbtn.undo{background:#FFD54F;border-color:#FFD54F;color:#333}
-
-/* ===== 音声入力 ===== */
-.voicepad{
-  display:none;position:fixed;left:0;right:0;bottom:0;z-index:85;
-  background:#F7F7F2;border-top:3px solid #1D5FA8;
-  padding:8px 12px 16px;box-shadow:0 -4px 16px rgba(0,0,0,.25);
-}
-.voicepad.show{display:block}
-.voice-row{
-  display:flex;gap:6px;align-items:center;margin-bottom:8px;
-}
-.voice-row select{
-  flex:1;min-width:0;padding:9px 6px;border:1px solid #BBB;border-radius:8px;
-  font-size:15px;background:#fff;
-}
-.vlabel{font-size:12px;font-weight:700;color:#1D5FA8;flex-shrink:0}
-.vmove{
-  padding:9px 12px;border:1px solid #1D5FA8;border-radius:8px;
-  background:#fff;color:#1D5FA8;font-size:14px;font-weight:700;flex-shrink:0;
-}
-.vmove:active{background:#1D5FA8;color:#fff}
-.voice-disp{
-  background:#fff;border:1px solid #BBB;border-radius:8px;padding:12px;
-  text-align:center;font-size:15px;color:#555;min-height:50px;
-}
-.voice-heard{
-  text-align:center;font-size:13px;color:#1D5FA8;min-height:20px;margin:6px 0;font-weight:600;
-}
-.voice-act{display:flex;gap:8px;margin-bottom:4px}
-.voice-mic{
-  flex:1;padding:16px 0;border:none;border-radius:12px;
-  background:#1D5FA8;color:#fff;font-size:17px;font-weight:700;
-}
-.voice-ok{
-  flex:1;padding:16px 0;border:none;border-radius:12px;
-  background:var(--green-d);color:#fff;font-size:16px;font-weight:700;
-}
-.voice-ok:disabled{background:#C5CBC5;color:#EEE}
-.voice-mic.listening{background:#C0392B;animation:vpulse 1.2s infinite}
-@keyframes vpulse{0%,100%{opacity:1}50%{opacity:.65}}
-
-/* ===== 電卓 ===== */
-.calcpad{
-  display:none;position:fixed;left:0;right:0;bottom:0;z-index:80;
-  background:#F7F7F2;border-top:3px solid var(--green);
-  padding:8px 10px 14px;box-shadow:0 -4px 16px rgba(0,0,0,.25);
-}
-.calcpad.show{display:block}
-.calc-head{display:flex;align-items:center;gap:8px;margin-bottom:6px}
-.calc-target{flex:1;font-size:13px;font-weight:700;color:var(--green-d)}
-.calc-x{border:none;background:transparent;font-size:20px;color:#666;padding:2px 8px}
-.calc-disp{
-  background:#fff;border:1px solid #BBB;border-radius:8px;
-  padding:10px 12px;text-align:right;font-family:var(--mono);
-  font-size:24px;font-weight:700;min-height:48px;overflow-x:auto;white-space:nowrap;
-}
-.calc-hint{font-size:11px;color:#777;margin:5px 0 7px;text-align:center}
-.calc-keys{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
-.calc-keys button{
-  padding:14px 0;border:1px solid #C3C3B8;border-radius:10px;background:#fff;
-  font-size:20px;font-weight:600;color:var(--ink);
-}
-.calc-keys button:active{background:#E5E5DC}
-.calc-keys button.op{background:#E8EFE5;color:var(--green-d)}
-.calc-keys button.clr{background:#F6DAD6;color:#C0392B;font-size:15px}
-.calc-keys button.eq{background:var(--green);color:#fff;font-size:22px}
-.calc-keys button.apply{
-  grid-column:span 2;background:var(--green-d);color:#fff;font-size:15px;
-}
-/* 電卓中のセル選択モード */
-tbody.pickmode input{pointer-events:none}
-tbody.pickmode td{cursor:pointer}
-tbody.pickmode td:active{background:#FFF4C4 !important}
-td input{
-  width:100%;height:56px;border:none;background:transparent;
-  font-family:var(--mono);font-size:15px;text-align:right;padding:0 4px;color:var(--ink);
-}
-td input:focus{outline:none;background:#FFF9DE}
-td.calc{color:var(--calc);text-align:right;padding:0 4px;font-weight:500}
-td.reading{background:#F3FBF1;font-weight:700}
-col.c-pt{width:64px}
-col.c-num{width:74px}
-col.c-read{width:74px}
-
-.toolbar{
-  padding:10px 12px;display:flex;gap:8px;align-items:center;background:#F2F2EE;
-}
-.toolbar .unit{font-size:13px;color:#555;flex:1}
-.btn{
-  padding:10px 16px;border:1.5px solid var(--green-d);border-radius:10px;
-  background:#fff;color:var(--green-d);font-size:14px;font-weight:700;
-}
-.checksum{
-  margin:0 12px 12px;padding:10px 12px;background:#fff;border:1px solid #CCC;
-  border-radius:10px;font-family:var(--mono);font-size:13px;color:#555;line-height:1.9;
-}
-.checksum b{color:var(--ink)}
-
-/* ===== 誤差補正 ===== */
-main.pad{padding:12px;max-width:640px;margin:0 auto}
-.sec{background:#fff;border:1px solid #CCC;border-radius:12px;padding:14px 12px;margin-bottom:12px}
-.sec h2{
-  font-size:13px;letter-spacing:.2em;color:var(--green-d);
-  border-left:4px solid var(--green);padding-left:8px;margin-bottom:12px;
-}
-.fld label{display:block;font-size:12px;color:#666;margin-bottom:4px}
-.fld input,.fld select{
-  width:100%;padding:10px 8px;border:1px solid #BBB;border-radius:8px;font-size:16px;background:#fff;
-}
-.fld input{font-family:var(--mono);text-align:right}
-.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
-.kv{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px dotted #CCC;font-size:14px}
-.kv:last-child{border-bottom:none}
-.kv .v{font-family:var(--mono);font-size:17px;font-weight:700}
-.badge{padding:4px 14px;border-radius:20px;font-size:13px;font-weight:700;color:#fff}
-.badge.ok{background:#2E8B57}.badge.ng{background:#C0392B}.badge.na{background:#999}
-table.corr{min-width:0;width:100%}
-table.corr th{font-size:12px;padding:7px 4px}
-table.corr td{height:auto;padding:8px 6px;text-align:right;font-size:14px}
-table.corr td:first-child{text-align:center;font-family:inherit}
-td.minus{color:#C0392B}
-td.adjv{font-weight:700}
-.note{font-size:12px;color:#666;line-height:1.7;margin-top:10px}
-
-.printonly{display:none}
-
-/* ===== PDF出力(印刷)用 ===== */
+:root{--bg:#0d1319;--card:#16202a;--line:#263442;--text:#e8eef3;--sub:#8fa3b3;--acc:#34d3c4;--warn:#ff7a6b;--btn:#203040}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif}
+button{font:inherit;color:inherit;background:var(--btn);border:1px solid var(--line);border-radius:10px;padding:10px 14px;cursor:pointer}
+button:active{opacity:.7}
+input{font:inherit;color:var(--text);background:#0b1117;border:1px solid var(--line);border-radius:8px;padding:10px 8px;width:100%;min-width:0}
+input:focus{outline:2px solid var(--acc);border-color:transparent}
+header{position:sticky;top:0;z-index:5;background:var(--bg);display:flex;align-items:center;gap:8px;padding:10px 12px;padding-top:max(10px,env(safe-area-inset-top));border-bottom:1px solid var(--line)}
+header h1{font-size:16px;margin:0;color:var(--acc);white-space:nowrap}
+#siteBtn{flex:1;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:transparent}
+#menuBtn{width:44px;padding:10px 0;font-size:18px}
+main{padding:12px 12px 120px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px;margin-bottom:10px}
+.top{display:flex;gap:8px;align-items:center}
+.top .nm{flex:0 0 110px;font-weight:600}
+.area{flex:1;text-align:right;font-size:20px;font-weight:700;font-variant-numeric:tabular-nums}
+.area small{font-size:12px;color:var(--sub);font-weight:400;margin-left:2px}
+.del{width:40px;padding:8px 0;background:transparent;color:var(--sub)}
+.sides{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:8px}
+.sides label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--sub)}
+.sides input{text-align:right;font-size:18px;font-variant-numeric:tabular-nums}
+.info{font-size:12px;color:var(--sub);margin-top:6px;min-height:15px;font-variant-numeric:tabular-nums}
+.info.err{color:var(--warn)}
+.card.bad{border-color:var(--warn)}
+footer{position:fixed;left:0;right:0;bottom:0;background:#0a0f14;border-top:1px solid var(--line);display:flex;align-items:center;gap:10px;padding:10px 12px;padding-bottom:max(10px,env(safe-area-inset-bottom))}
+.tot{flex:1}
+.tot .l{font-size:12px;color:var(--sub)}
+.tot .v{font-size:26px;font-weight:800;color:var(--acc);font-variant-numeric:tabular-nums}
+.tot .v small{font-size:14px;color:var(--sub);font-weight:400}
+.tot .w{font-size:11px;color:var(--warn)}
+#addBtn{background:var(--acc);color:#04211e;border:0;font-weight:700;padding:14px 18px}
+.ov{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:20;display:flex;align-items:flex-end;justify-content:center}
+.sheet{background:var(--card);width:100%;max-width:520px;border-radius:16px 16px 0 0;padding:14px 14px max(14px,env(safe-area-inset-bottom));max-height:85vh;overflow:auto}
+.sheet h2{font-size:15px;margin:2px 0 10px;color:var(--sub);font-weight:600}
+.sheet .list button{display:block;width:100%;text-align:left;margin-bottom:6px}
+.sheet .list button.on{border-color:var(--acc);color:var(--acc)}
+.sheet .row{display:flex;gap:8px;margin-top:10px}
+.sheet .row button{flex:1}
+.sheet p{margin:4px 0 8px;line-height:1.6}
+.pri{background:var(--acc);color:#04211e;border:0;font-weight:700}
+.dng{color:var(--warn)}
+.seg{display:flex;gap:6px;margin-bottom:6px}.seg button{flex:1}.seg button.on{border-color:var(--acc);color:var(--acc)}
+#toast{position:fixed;left:50%;bottom:100px;transform:translateX(-50%);background:#e8eef3;color:#0d1319;padding:10px 14px;border-radius:10px;z-index:30;display:none;align-items:center;gap:12px;font-size:14px;max-width:92%}
+#toast button{background:transparent;border:0;color:#0a7d73;font-weight:700;padding:4px}
+#print{display:none}
 @media print{
-  @page{size:A4 landscape;margin:10mm}
-  .printonly{display:inline;font-size:14px;font-weight:700;margin-left:12px}
-  body{background:#fff;padding-bottom:0;font-size:11px}
-  header{position:static;background:#fff;color:#000;border-bottom:2px solid #000;padding:6px 0}
-  header h1{color:#000;font-size:18px}
-  header input{background:transparent;color:#000;border:none;font-size:15px}
-  header input::placeholder{color:transparent}
-  .tabs,.toolbar,.btn,.projbar,.ovl,.insbtn,.selbar,.snack,.calcpad,.voicepad{display:none !important}
-  .panel{display:block !important}
-  .tablewrap{overflow:visible}
-  table{min-width:0;width:100%}
-  td{height:auto}
-  td input{height:auto;padding:4px 4px;font-size:12px}
-  td.rownum input.ptname{height:auto;font-size:11px}
-  th{font-size:11px}
-  th small{font-size:8px}
-  td.calc{font-size:12px}
-  .checksum{border:1px solid #000;margin:8px 0}
-  main.pad{padding:8px 0;max-width:none}
-  .sec{border:1px solid #000;page-break-inside:avoid}
-  #p1{page-break-before:always}
-  input:focus{background:transparent}
+ body{background:#fff;color:#000}
+ header,main,footer,#toast,.ov{display:none!important}
+ #print{display:block;font-size:11pt;color:#000}
+ #print h1{font-size:15pt;margin:0 0 4px}
+ #print .meta{margin-bottom:8px}
+ #print table{border-collapse:collapse;width:100%}
+ #print th,#print td{border:1px solid #000;padding:4px 6px;text-align:right;font-variant-numeric:tabular-nums}
+ #print th{background:#eee;text-align:center}
+ #print td.n{text-align:left}
+ #print .tr td{font-weight:700}
+ #print .note{margin-top:6px;font-size:9pt}
 }
 </style>
 </head>
 <body>
-
 <header>
-  <h1>野帳</h1>
-  <input type="text" id="site" placeholder="工事名(例:下水道)" oninput="renameProject(this.value)">
-  <span id="printDate" class="printonly"></span>
+ <h1>ヘロン求積</h1>
+ <button id="siteBtn"></button>
+ <button id="menuBtn" aria-label="メニュー">⋮</button>
 </header>
-
-<div class="projbar">
-  <span class="plabel">工事</span>
-  <select id="projSel" onchange="switchProject(this.value)"></select>
-  <button class="pbtn" onclick="openNewDlg()">＋新規</button>
-  <button class="pbtn danger" onclick="openDelDlg()">削除</button>
-</div>
-<div class="projbar datebar">
-  <span class="plabel">日付</span>
-  <select id="dateSel" onchange="switchDate(this.value)" ontouchstart="datePress()" ontouchend="datePressEnd(event)" ontouchmove="datePressCancel()" oncontextmenu="openCopyDateDlg();return false"></select>
-  <button class="pbtn" onclick="openNewDateDlg()">＋追加</button>
-  <button class="pbtn" onclick="openEditDateDlg()">変更</button>
-  <button class="pbtn danger" onclick="openDelDateDlg()">削除</button>
-</div>
-
-<!-- 新規工事ダイアログ -->
-<div class="ovl" id="newDlg">
-  <div class="dlg">
-    <h3>新しい工事を作成</h3>
-    <input type="text" id="newName" placeholder="工事名を入力">
-    <div class="dlg-btns">
-      <button class="pbtn" onclick="closeDlg('newDlg')">キャンセル</button>
-      <button class="pbtn primary" onclick="confirmNew()">作成</button>
-    </div>
-  </div>
-</div>
-
-<!-- 削除確認ダイアログ(工事) -->
-<div class="ovl" id="delDlg">
-  <div class="dlg">
-    <h3>工事データの削除</h3>
-    <p id="delMsg" style="font-size:14px;line-height:1.7;color:#444"></p>
-    <div class="dlg-btns">
-      <button class="pbtn" onclick="closeDlg('delDlg')">キャンセル</button>
-      <button class="pbtn danger" onclick="confirmDel()">削除する</button>
-    </div>
-  </div>
-</div>
-
-<!-- 新規日付ダイアログ -->
-<div class="ovl" id="newDateDlg">
-  <div class="dlg">
-    <h3>日付を追加</h3>
-    <input type="date" id="newDate">
-    <input type="text" id="newDateMemo" placeholder="メモ(任意・例:A工区 布設)">
-    <div class="dlg-btns">
-      <button class="pbtn" onclick="closeDlg('newDateDlg')">キャンセル</button>
-      <button class="pbtn primary" onclick="confirmNewDate()">追加</button>
-    </div>
-  </div>
-</div>
-
-<!-- 日付変更ダイアログ -->
-<div class="ovl" id="editDateDlg">
-  <div class="dlg">
-    <h3>日付・メモの変更</h3>
-    <input type="date" id="editDate">
-    <input type="text" id="editDateMemo" placeholder="メモ(任意)">
-    <div class="dlg-btns">
-      <button class="pbtn" onclick="closeDlg('editDateDlg')">キャンセル</button>
-      <button class="pbtn primary" onclick="confirmEditDate()">変更する</button>
-    </div>
-  </div>
-</div>
-
-<!-- 日付複製ダイアログ -->
-<div class="ovl" id="copyDateDlg">
-  <div class="dlg">
-    <h3>日付データの複製</h3>
-    <p id="copySrcMsg" style="font-size:13px;line-height:1.7;color:#444;margin-bottom:10px"></p>
-    <input type="date" id="copyDate">
-    <input type="text" id="copyDateMemo" placeholder="メモ(任意)">
-    <div class="dlg-btns">
-      <button class="pbtn" onclick="closeDlg('copyDateDlg')">キャンセル</button>
-      <button class="pbtn primary" onclick="confirmCopyDate()">複製する</button>
-    </div>
-  </div>
-</div>
-
-<!-- 削除確認ダイアログ(日付) -->
-<div class="ovl" id="delDateDlg">
-  <div class="dlg">
-    <h3>日付データの削除</h3>
-    <p id="delDateMsg" style="font-size:14px;line-height:1.7;color:#444"></p>
-    <div class="dlg-btns">
-      <button class="pbtn" onclick="closeDlg('delDateDlg')">キャンセル</button>
-      <button class="pbtn danger" onclick="confirmDelDate()">削除する</button>
-    </div>
-  </div>
-</div>
-
-<!-- 削除確認ダイアログ(行) -->
-<div class="ovl" id="delRowDlg">
-  <div class="dlg">
-    <h3>行の削除</h3>
-    <p id="delRowMsg" style="font-size:14px;line-height:1.7;color:#444"></p>
-    <div class="dlg-btns">
-      <button class="pbtn" onclick="closeDlg('delRowDlg')">キャンセル</button>
-      <button class="pbtn danger" onclick="confirmDelRow()">削除する</button>
-    </div>
-  </div>
-</div>
-
-<!-- 行選択中の操作バー -->
-<div class="selbar" id="selbar">
-  <span id="selCount" class="selcount">0行選択中</span>
-  <button class="pbtn" onclick="exitSel()">キャンセル</button>
-  <button class="pbtn selins" onclick="insertBelowSelected()">挿入</button>
-  <button class="pbtn seldel" onclick="openDelSelDlg()">削除</button>
-</div>
-
-<!-- 元に戻すバー -->
-<div class="snack" id="snack">
-  <span id="snackMsg" class="snackmsg"></span>
-  <button class="pbtn undo" onclick="undo()">元に戻す</button>
-</div>
-
-<!-- 計画高の貼り付けダイアログ -->
-<div class="ovl" id="pastePlanDlg">
-  <div class="dlg">
-    <h3>計画高の貼り付け</h3>
-    <p id="pasteMsg" style="font-size:13px;line-height:1.7;color:#444;margin-bottom:12px"></p>
-    <div class="dlg-btns" style="flex-direction:column;align-items:stretch;gap:8px">
-      <button class="pbtn primary" onclick="pastePlan(false)">計画高のみ貼り付け</button>
-      <button class="pbtn primary" onclick="pastePlan(true)">測点名も一緒に貼り付け</button>
-      <button class="pbtn" onclick="closeDlg('pastePlanDlg')">キャンセル</button>
-    </div>
-  </div>
-</div>
-
-<!-- すべて貼り付けダイアログ -->
-<div class="ovl" id="pasteAllDlg">
-  <div class="dlg">
-    <h3>野帳をすべて貼り付け</h3>
-    <p id="pasteAllMsg" style="font-size:13px;line-height:1.7;color:#444;margin-bottom:12px"></p>
-    <div class="dlg-btns" style="flex-direction:column;align-items:stretch;gap:8px">
-      <button class="pbtn primary" onclick="pasteAll(false)">観測値も含めてすべて</button>
-      <button class="pbtn primary" onclick="pasteAll(true)">測点・計画高のみ(BS/FSは空)</button>
-      <button class="pbtn" onclick="closeDlg('pasteAllDlg')">キャンセル</button>
-    </div>
-  </div>
-</div>
-
-<!-- バックアップ読み込みダイアログ -->
-<div class="ovl" id="importDlg">
-  <div class="dlg">
-    <h3>バックアップの読み込み</h3>
-    <p id="importMsg" style="font-size:13px;line-height:1.7;color:#444;margin-bottom:12px"></p>
-    <div class="dlg-btns" style="flex-direction:column;align-items:stretch;gap:8px">
-      <button class="pbtn primary" onclick="applyImport(true)">今のデータに追加する</button>
-      <button class="pbtn danger" onclick="applyImport(false)">すべて置き換える</button>
-      <button class="pbtn" onclick="closeDlg('importDlg')">キャンセル</button>
-    </div>
-  </div>
-</div>
-
-<!-- 音声入力パネル -->
-<div class="voicepad" id="voicepad">
-  <div class="calc-head">
-    <span id="voiceTarget" class="calc-target"></span>
-    <button class="calc-x" onclick="stopVoice()">✕</button>
-  </div>
-  <div class="voice-row">
-    <span class="vlabel">入力先</span>
-    <select id="voiceCol" onchange="changeVoiceCol(this.value)">
-      <option value="name">測点名</option>
-      <option value="bs">BS(後視)</option>
-      <option value="fs">FS(前視)</option>
-      <option value="plan">計画高</option>
-    </select>
-    <button class="vmove" onclick="moveVoiceRow(-1)">▲</button>
-    <select id="voiceRowSel" onchange="setVoiceRow(this.value)"></select>
-    <button class="vmove" onclick="moveVoiceRow(1)">▼</button>
-  </div>
-  <div class="voice-disp" id="voiceDisp">マイクを押して話してください</div>
-  <div class="voice-heard" id="voiceHeard"></div>
-  <div class="voice-act">
-    <button class="voice-mic" id="voiceMic" onclick="toggleVoice()">🎤 話す</button>
-    <button class="voice-ok" id="voiceOk" onclick="confirmVoice()" disabled>✓ 確定して次へ</button>
-  </div>
-  <div class="calc-hint" id="voiceHint">例:「いち てん ごー まる まる」「1.500」／ 聞き取り後、確定ボタンで入力されます</div>
-</div>
-
-<!-- 電卓 -->
-<div class="calcpad" id="calcpad">
-  <div class="calc-head">
-    <span id="calcTarget" class="calc-target"></span>
-    <button class="calc-x" onclick="closeCalc()">✕</button>
-  </div>
-  <div class="calc-disp" id="calcDisp">0</div>
-  <div class="calc-hint">表のセルをタップするとその数値を取り込めます</div>
-  <div class="calc-keys">
-    <button onclick="ck('7')">7</button><button onclick="ck('8')">8</button><button onclick="ck('9')">9</button><button class="op" onclick="ck('/')">÷</button>
-    <button onclick="ck('4')">4</button><button onclick="ck('5')">5</button><button onclick="ck('6')">6</button><button class="op" onclick="ck('*')">×</button>
-    <button onclick="ck('1')">1</button><button onclick="ck('2')">2</button><button onclick="ck('3')">3</button><button class="op" onclick="ck('-')">−</button>
-    <button onclick="ck('0')">0</button><button onclick="ck('.')">.</button><button class="op" onclick="calcBack()">⌫</button><button class="op" onclick="ck('+')">＋</button>
-    <button class="clr" onclick="calcClear()">クリア</button>
-    <button class="eq" onclick="calcEq()">＝</button>
-    <button class="apply" onclick="calcApply()">セルに入力</button>
-  </div>
-</div>
-
-<div class="tabs">
-  <button id="t0" class="on" onclick="tab(0)">野 帳</button>
-  <button id="t1" onclick="tab(1)">誤差補正</button>
-</div>
-
-<!-- ===== 野帳 ===== -->
-<div class="panel on" id="p0">
-  <div class="tablewrap">
-    <table>
-      <colgroup>
-        <col class="c-pt"><col class="c-num"><col class="c-num"><col class="c-num">
-        <col class="c-num"><col class="c-num"><col class="c-read"><col class="c-num">
-      </colgroup>
-      <thead>
-        <tr>
-          <th>測点</th>
-          <th>BS<small>後 視</small></th>
-          <th>IH<small>器械高</small></th>
-          <th>FS<small>前 視</small></th>
-          <th>GH<small>地盤高</small></th>
-          <th class="plan-th">計画高<small>入 力</small></th>
-          <th class="plan-th">読み<small>IH−計画高</small></th>
-          <th class="plan-th">差<small>読み−FS</small></th>
-        </tr>
-      </thead>
-      <tbody id="tb"></tbody>
-    </table>
-  </div>
-  <div class="toolbar">
-    <span class="unit">音声で入力</span>
-    <button class="btn" onclick="startVoice('bs')">🎤 BS</button>
-    <button class="btn" onclick="startVoice('fs')">🎤 FS</button>
-    <button class="btn" onclick="startVoice('plan')">🎤 計画高</button>
-    <button class="btn" onclick="startVoice('name')">🎤 測点名</button>
-  </div>
-  <div class="toolbar">
-    <span class="unit">単位:メートル(m)</span>
-    <button class="btn" onclick="undo()">↩ 戻る</button>
-    <button class="btn" onclick="redo()">↪ 進む</button>
-    <button class="btn" onclick="addRows(5)">＋5行</button>
-    <button class="btn" onclick="window.print()">PDF出力</button>
-  </div>
-  <div class="toolbar">
-    <span class="unit">計画高・測点をまとめて複製</span>
-    <button class="btn" onclick="copyPlan()">計画高をコピー</button>
-    <button class="btn" onclick="openPastePlanDlg()">貼り付け</button>
-  </div>
-  <div class="toolbar">
-    <span class="unit">野帳全体を複製(観測値も含む)</span>
-    <button class="btn" onclick="copyAll()">すべてコピー</button>
-    <button class="btn" onclick="openPasteAllDlg()">すべて貼り付け</button>
-  </div>
-  <div class="toolbar">
-    <span class="unit">全工事のバックアップ</span>
-    <button class="btn" id="installBtn" style="display:none" onclick="installApp()">📲 アプリ追加</button>
-    <button class="btn" onclick="checkOffline()">📶 オフライン確認</button>
-    <button class="btn" onclick="exportBackup()">書き出し</button>
-    <button class="btn" onclick="document.getElementById('importFile').click()">読み込み</button>
-    <input type="file" id="importFile" accept=".json,application/json" style="display:none" onchange="importBackup(this)">
-  </div>
-  <div class="checksum" id="checksum"></div>
-</div>
-
-<!-- ===== 誤差補正 ===== -->
-<div class="panel" id="p1">
-<main class="pad">
-  <div class="sec">
-    <h2>閉合差の計算</h2>
-    <div class="fld" style="margin-bottom:10px">
-      <label>到着点(検証点)の既知標高 m</label>
-      <input type="number" inputmode="decimal" step="0.001" id="knownH" placeholder="0.000" oninput="calc();saveStore()">
-    </div>
-    <div class="kv"><span>観測による最終地盤高</span><span class="v" id="lastGH">─</span></div>
-    <div class="kv"><span>閉合差 E</span><span class="v" id="closure">─</span></div>
-  </div>
-
-  <div class="sec">
-    <h2>許容誤差の判定(公共測量)</h2>
-    <div class="row2">
-      <div class="fld">
-        <label>等級</label>
-        <select id="grade" onchange="calc();saveStore()">
-          <option value="2.5">1級 (2.5mm√S)</option>
-          <option value="5">2級 (5mm√S)</option>
-          <option value="10" selected>3級 (10mm√S)</option>
-          <option value="20">4級 (20mm√S)</option>
-          <option value="40">簡易 (40mm√S)</option>
-        </select>
-      </div>
-      <div class="fld">
-        <label>路線長 S (km・片道)</label>
-        <input type="number" inputmode="decimal" step="0.01" id="routeKm" placeholder="0.50" oninput="calc();saveStore()">
-      </div>
-    </div>
-    <div class="kv"><span>許容誤差</span><span class="v" id="tolerance">─</span></div>
-    <div class="kv"><span>判定</span><span id="verdict" class="badge na">未入力</span></div>
-  </div>
-
-  <div class="sec">
-    <h2>補正の配分(測点数に比例)</h2>
-    <table class="corr">
-      <thead><tr><th>測点</th><th>地盤高</th><th>補正量</th><th>補正後標高</th></tr></thead>
-      <tbody id="corrBody"></tbody>
-    </table>
-    <div class="note">補正量 = −E × (測点順の累計 ÷ 合計)。閉合差を各測点へ均等に配分します。</div>
-  </div>
-</main>
-</div>
+<main id="list"></main>
+<footer>
+ <div class="tot"><div class="l">合計面積</div><div class="v" id="total">0<small> m²</small></div><div class="w" id="warn"></div></div>
+ <button id="addBtn">＋ 三角形</button>
+</footer>
+<div id="toast"><span id="tmsg"></span><button id="tact"></button></div>
+<div id="print"></div>
+<input type="file" id="fileIn" accept=".json,application/json" hidden>
 
 <script>
-const N_START = 15;
-// 各行: {name(測点名), bs, fs, gh0(1行目のみ手入力GH), plan}
-function blankRows(){ return Array.from({length:N_START},(_,i)=>({name:i===0?"KBM":"No."+(i-1),bs:"",fs:"",gh0:"",plan:""})); }
-let rows = blankRows();
+const KEY='heron_v1';
+let st, lastDeleted=null, toastTimer=null;
 
-/* ===== 保存(工事→日付ごと) ===== */
-const STORE="yacho_store_v1";
-let store={projects:{},currentId:null};
-function today(){ const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
-function blankDate(dateStr){ return {date:dateStr||today(),rows:blankRows(),knownH:"",grade:"10",routeKm:""}; }
-function blankProject(name){
-  const did="d"+Date.now();
-  return {name:name||"工事1",dates:{[did]:blankDate()},currentDateId:did};
+function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7)}
+function newRow(n){return {id:uid(),name:'No.'+n,a:'',b:'',c:''}}
+function newSite(name){return {name,rows:[newRow(1)],updated:Date.now()}}
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+
+function load(){
+ try{st=JSON.parse(localStorage.getItem(KEY))}catch(e){st=null}
+ if(!st||typeof st!=='object'||!st.sites||!Object.keys(st.sites).length){const id=uid();st={sites:{[id]:newSite('区画1')},currentId:id,digits:3}}
+ for(const k in st.sites){const s=st.sites[k];if(!Array.isArray(s.rows))s.rows=[];if(!s.name)s.name='区画'}
+ if(!st.sites[st.currentId])st.currentId=Object.keys(st.sites)[0];
+ if(![2,3,4].includes(st.digits))st.digits=3;
 }
-function loadStore(){
-  try{
-    const s=localStorage.getItem(STORE);
-    if(s){ store=JSON.parse(s); }
-  }catch(e){}
-  // 旧形式(日付なし)からの自動移行
-  Object.values(store.projects||{}).forEach(p=>{
-    if(!p.dates){
-      const did="d"+Date.now()+Math.random().toString(36).slice(2,6);
-      p.dates={[did]:{date:today(),rows:p.rows||blankRows(),knownH:p.knownH||"",grade:p.grade||"10",routeKm:p.routeKm||""}};
-      p.currentDateId=did;
-      delete p.rows; delete p.knownH; delete p.grade; delete p.routeKm;
-    }
-    if(!p.currentDateId || !p.dates[p.currentDateId]){
-      p.currentDateId=Object.keys(p.dates)[0];
-    }
-    // 旧初期名をKBM/No.0形式へ移行(手入力した名前は変更しない)
-    Object.values(p.dates).forEach(d=>{
-      (d.rows||[]).forEach((r,i)=>{
-        if(r.name===String(i+1) || (i>0 && r.name==="No."+i)){ r.name = i===0? "KBM" : "No."+(i-1); }
-      });
-    });
-  });
-  if(!store.currentId || !store.projects[store.currentId]){
-    const id="p"+Date.now();
-    store.projects[id]=blankProject("工事1");
-    store.currentId=id;
-  }
+function save(){cur().updated=Date.now();try{localStorage.setItem(KEY,JSON.stringify(st))}catch(e){toast('保存できませんでした')}}
+function cur(){return st.sites[st.currentId]}
+
+// 全角数字・カンマも受け付ける
+function num(v){
+ if(v==null)return NaN;
+ let s=String(v).trim().replace(/[０-９]/g,d=>String.fromCharCode(d.charCodeAt(0)-0xFEE0)).replace(/[．。，,]/g,'.').replace(/[－ー−]/g,'-');
+ if(s==='')return NaN;
+ if(!/^-?\d*\.?\d+$|^-?\d+\.$/.test(s))return NaN;
+ return Number(s);
 }
-function curProj(){ return store.projects[store.currentId]; }
-function curDate(){ const p=curProj(); return p? p.dates[p.currentDateId] : null; }
-let saveTimer=null;
-function saveStore(){
-  clearTimeout(saveTimer);
-  saveTimer=setTimeout(()=>{
-    const d=curDate();
-    if(d){
-      d.rows=rows;
-      d.knownH=document.getElementById("knownH").value;
-      d.grade=document.getElementById("grade").value;
-      d.routeKm=document.getElementById("routeKm").value;
-    }
-    try{ localStorage.setItem(STORE,JSON.stringify(store)); }catch(e){}
-  },300);
-}
-function applyDate(){
-  const d=curDate();
-  rows=d.rows||blankRows();
-  document.getElementById("site").value=curProj().name||"";
-  document.getElementById("knownH").value=d.knownH||"";
-  document.getElementById("grade").value=d.grade||"10";
-  document.getElementById("routeKm").value=d.routeKm||"";
-  document.getElementById("printDate").textContent=fmtDate(d.date)+(d.memo?(" "+d.memo):"");
-  render(); calc();
-}
-function fmtDate(s){
-  if(!s) return "(日付なし)";
-  const[y,m,dd]=s.split("-");
-  return `${y}/${Number(m)}/${Number(dd)}`;
-}
-function renderProjSel(){
-  const sel=document.getElementById("projSel");
-  sel.innerHTML=Object.entries(store.projects)
-    .map(([id,p])=>`<option value="${id}" ${id===store.currentId?"selected":""}>${(p.name||"(無題)").replace(/</g,"&lt;")}</option>`).join("");
-  renderDateSel();
-}
-function renderDateSel(){
-  const p=curProj();
-  const sel=document.getElementById("dateSel");
-  sel.innerHTML=Object.entries(p.dates)
-    .sort((a,b)=> (b[1].date||"").localeCompare(a[1].date||""))
-    .map(([id,d])=>`<option value="${id}" ${id===p.currentDateId?"selected":""}>${fmtDate(d.date)}${d.memo?(" "+d.memo.replace(/</g,"&lt;")):""}</option>`).join("");
-}
-function switchProject(id){ store.currentId=id; applyDate(); renderProjSel(); saveStore(); }
-function switchDate(id){ curProj().currentDateId=id; applyDate(); renderDateSel(); saveStore(); }
-function openNewDlg(){
-  document.getElementById("newName").value="工事"+(Object.keys(store.projects).length+1);
-  document.getElementById("newDlg").classList.add("show");
-}
-function confirmNew(){
-  const name=document.getElementById("newName").value.trim()||"(無題)";
-  const id="p"+Date.now();
-  store.projects[id]=blankProject(name);
-  store.currentId=id;
-  closeDlg("newDlg");
-  applyDate(); renderProjSel(); saveStore();
-}
-function openDelDlg(){
-  const p=curProj();
-  document.getElementById("delMsg").textContent=`「${p.name||"(無題)"}」の全データ(すべての日付を含む)を削除します。この操作は元に戻せません。`;
-  document.getElementById("delDlg").classList.add("show");
-}
-function confirmDel(){
-  pushUndo();
-  const delName=curProj().name||"(無題)";
-  delete store.projects[store.currentId];
-  if(Object.keys(store.projects).length===0){
-    const id="p"+Date.now();
-    store.projects[id]=blankProject("工事1");
-  }
-  store.currentId=Object.keys(store.projects)[0];
-  closeDlg("delDlg");
-  applyDate(); renderProjSel(); saveStore();
-  showSnack("「"+delName+"」を削除しました");
-}
-function openNewDateDlg(){
-  document.getElementById("newDate").value=today();
-  document.getElementById("newDateMemo").value="";
-  document.getElementById("newDateDlg").classList.add("show");
-}
-function confirmNewDate(){
-  const p=curProj();
-  const dateStr=document.getElementById("newDate").value||today();
-  const did="d"+Date.now();
-  p.dates[did]=blankDate(dateStr);
-  p.dates[did].memo=document.getElementById("newDateMemo").value.trim();
-  p.currentDateId=did;
-  closeDlg("newDateDlg");
-  applyDate(); renderDateSel(); saveStore();
-}
-function openEditDateDlg(){
-  const d=curDate();
-  document.getElementById("editDate").value=d.date||today();
-  document.getElementById("editDateMemo").value=d.memo||"";
-  document.getElementById("editDateDlg").classList.add("show");
-}
-function confirmEditDate(){
-  const d=curDate();
-  d.date=document.getElementById("editDate").value||d.date;
-  d.memo=document.getElementById("editDateMemo").value.trim();
-  closeDlg("editDateDlg");
-  applyDate(); renderDateSel(); saveStore();
+function rnd(x,d){const f=Math.pow(10,d);return Math.round((x+Math.abs(x)*Number.EPSILON*4)*f)/f}
+
+function calc(r){
+ const a=num(r.a),b=num(r.b),c=num(r.c);
+ const filled=[r.a,r.b,r.c].filter(v=>String(v??'').trim()!=='').length;
+ if(filled===0)return {st:'empty'};
+ if(isNaN(a)||isNaN(b)||isNaN(c)){
+  if(filled<3&&[r.a,r.b,r.c].every(v=>String(v??'').trim()===''||!isNaN(num(v))))return {st:'partial'};
+  return {st:'err',msg:'数値を確認してください'};
+ }
+ if(a<=0||b<=0||c<=0)return {st:'err',msg:'辺の長さは0より大きくしてください'};
+ const p=(a+b+c)*(-a+b+c)*(a-b+c)*(a+b-c);
+ if(p<=0)return {st:'err',msg:'三角形になりません（2辺の和が残り1辺以下）'};
+ const s=(a+b+c)/2;
+ return {st:'ok',a,b,c,s,sa:s-a,sb:s-b,sc:s-c,area:Math.sqrt(p)/4};
 }
 
-/* ===== 日付長押しで複製 ===== */
-let datePressTimer=null, dateLongFired=false;
-function datePress(){
-  datePressCancel();
-  dateLongFired=false;
-  datePressTimer=setTimeout(()=>{ dateLongFired=true; openCopyDateDlg(); },600);
-}
-function datePressCancel(){ clearTimeout(datePressTimer); }
-function datePressEnd(e){
-  datePressCancel();
-  if(dateLongFired){ e.preventDefault(); dateLongFired=false; }
-}
-function openCopyDateDlg(){
-  // 現在編集中の入力を確実に保存してから複製元にする
-  const d=curDate();
-  d.rows=rows;
-  d.knownH=document.getElementById("knownH").value;
-  d.grade=document.getElementById("grade").value;
-  d.routeKm=document.getElementById("routeKm").value;
-  document.getElementById("copySrcMsg").textContent=`「${fmtDate(d.date)}${d.memo?(" "+d.memo):""}」のデータをコピーして、選んだ日付に複製します。`;
-  document.getElementById("copyDate").value=today();
-  document.getElementById("copyDateMemo").value=d.memo||"";
-  document.getElementById("copyDateDlg").classList.add("show");
-}
-function confirmCopyDate(){
-  const p=curProj();
-  const src=curDate();
-  const did="d"+Date.now();
-  const copy=JSON.parse(JSON.stringify(src)); // 完全コピー
-  copy.date=document.getElementById("copyDate").value||today();
-  copy.memo=document.getElementById("copyDateMemo").value.trim();
-  p.dates[did]=copy;
-  p.currentDateId=did;
-  closeDlg("copyDateDlg");
-  applyDate(); renderDateSel(); saveStore();
-}
-function openDelDateDlg(){
-  const d=curDate();
-  document.getElementById("delDateMsg").textContent=`「${curProj().name}」の ${fmtDate(d.date)} のデータを削除します。この操作は元に戻せません。`;
-  document.getElementById("delDateDlg").classList.add("show");
-}
-function confirmDelDate(){
-  pushUndo();
-  const p=curProj();
-  const delName=fmtDate(curDate().date);
-  delete p.dates[p.currentDateId];
-  if(Object.keys(p.dates).length===0){
-    const did="d"+Date.now();
-    p.dates[did]=blankDate();
-  }
-  p.currentDateId=Object.keys(p.dates)[0];
-  closeDlg("delDateDlg");
-  applyDate(); renderDateSel(); saveStore();
-  showSnack(delName+" のデータを削除しました");
-}
-function closeDlg(id){ document.getElementById(id).classList.remove("show"); }
-
-/* ===== 元に戻す(削除の取り消し) ===== */
-let undoStack=[], redoStack=[], snackTimer=null;
-function syncCur(){
-  const d=curDate();
-  if(d){
-    d.rows=rows;
-    d.knownH=document.getElementById("knownH").value;
-    d.grade=document.getElementById("grade").value;
-    d.routeKm=document.getElementById("routeKm").value;
-  }
-}
-function pushUndo(){
-  syncCur();
-  undoStack.push(JSON.stringify(store));
-  if(undoStack.length>20) undoStack.shift();
-  redoStack=[]; // 新しい操作をしたら進む履歴はクリア
-}
-function showSnack(msg){
-  document.getElementById("snackMsg").textContent=msg;
-  document.getElementById("snack").classList.add("show");
-  clearTimeout(snackTimer);
-  snackTimer=setTimeout(hideSnack,8000);
-}
-function hideSnack(){ document.getElementById("snack").classList.remove("show"); }
-function undo(){
-  if(undoStack.length===0){ showSnack("これ以上戻れません"); return; }
-  syncCur();
-  redoStack.push(JSON.stringify(store));
-  if(redoStack.length>20) redoStack.shift();
-  store=JSON.parse(undoStack.pop());
-  if(!store.projects[store.currentId]) store.currentId=Object.keys(store.projects)[0];
-  hideSnack();
-  applyDate(); renderProjSel(); saveStore();
-}
-function redo(){
-  if(redoStack.length===0){ showSnack("進む操作はありません"); return; }
-  syncCur();
-  undoStack.push(JSON.stringify(store));
-  if(undoStack.length>20) undoStack.shift();
-  store=JSON.parse(redoStack.pop());
-  if(!store.projects[store.currentId]) store.currentId=Object.keys(store.projects)[0];
-  hideSnack();
-  applyDate(); renderProjSel(); saveStore();
-}
-
-/* ===== 計画高のコピー・貼り付け ===== */
-const CLIP="yacho_clip_plan_v1";
-function copyPlan(){
-  const data={
-    src:(curProj().name||"")+" "+fmtDate(curDate().date),
-    items:rows.map(r=>({name:r.name,plan:r.plan}))
-  };
-  try{ localStorage.setItem(CLIP,JSON.stringify(data)); }catch(e){}
-  const n=rows.filter(r=>r.plan!=="").length;
-  showSnack("計画高 "+n+"点をコピーしました");
-}
-function getClip(){
-  try{ const s=localStorage.getItem(CLIP); return s? JSON.parse(s):null; }catch(e){ return null; }
-}
-function openPastePlanDlg(){
-  const c=getClip();
-  if(!c){ showSnack("コピーされたデータがありません"); return; }
-  const n=c.items.filter(x=>x.plan!=="").length;
-  document.getElementById("pasteMsg").textContent=
-    `コピー元: ${c.src}(${c.items.length}行・計画高${n}点)。上から順に貼り付けます。今の計画高は上書きされます。`;
-  document.getElementById("pastePlanDlg").classList.add("show");
-}
-function pastePlan(withName){
-  const c=getClip();
-  if(!c){ closeDlg("pastePlanDlg"); return; }
-  pushUndo();
-  while(rows.length<c.items.length){
-    rows.push({name:"",bs:"",fs:"",gh0:"",plan:""});
-  }
-  c.items.forEach((x,i)=>{
-    if(i>0) rows[i].plan=x.plan||"";   // 1行目(KBM)は計画高なし
-    if(withName && x.name) rows[i].name=x.name;
-  });
-  closeDlg("pastePlanDlg");
-  render(); calc(); saveStore();
-  showSnack("計画高を貼り付けました");
-}
-
-/* ===== すべて複製(野帳全体) ===== */
-const CLIPALL="yacho_clip_all_v1";
-function copyAll(){
-  syncCur();
-  const d=curDate();
-  const data={
-    src:(curProj().name||"")+" "+fmtDate(d.date)+(d.memo?(" "+d.memo):""),
-    rows:JSON.parse(JSON.stringify(rows)),
-    knownH:d.knownH||"", grade:d.grade||"10", routeKm:d.routeKm||""
-  };
-  try{ localStorage.setItem(CLIPALL,JSON.stringify(data)); }catch(e){}
-  showSnack("野帳(" + rows.length + "行)をすべてコピーしました");
-}
-function getClipAll(){
-  try{ const s=localStorage.getItem(CLIPALL); return s? JSON.parse(s):null; }catch(e){ return null; }
-}
-function openPasteAllDlg(){
-  const c=getClipAll();
-  if(!c){ showSnack("コピーされたデータがありません"); return; }
-  document.getElementById("pasteAllMsg").textContent=
-    `コピー元: ${c.src}(${c.rows.length}行)。今開いている野帳の内容はすべて置き換わります。`;
-  document.getElementById("pasteAllDlg").classList.add("show");
-}
-function pasteAll(planOnly){
-  const c=getClipAll();
-  if(!c){ closeDlg("pasteAllDlg"); return; }
-  pushUndo();
-  rows=JSON.parse(JSON.stringify(c.rows));
-  if(planOnly){
-    rows.forEach((r,i)=>{ r.bs=""; r.fs=""; if(i===0) r.gh0=r.gh0; });
-  }
-  const d=curDate();
-  d.knownH = planOnly? "" : (c.knownH||"");
-  d.grade = c.grade||"10";
-  d.routeKm = c.routeKm||"";
-  document.getElementById("knownH").value=d.knownH;
-  document.getElementById("grade").value=d.grade;
-  document.getElementById("routeKm").value=d.routeKm;
-  closeDlg("pasteAllDlg");
-  render(); calc(); saveStore();
-  showSnack(planOnly? "測点・計画高を貼り付けました" : "野帳をすべて貼り付けました");
-}
-
-/* ===== 音声入力 ===== */
-let rec=null, listening=false, voiceCol=null, voiceRow=null, pendingVal=null;
-const VCOLNAME={fs:"FS(前視)",plan:"計画高",bs:"BS(後視)",name:"測点名"};
-// 測点名の聞き取り結果を整形
-function parsePointName(text){
-  let t=String(text).trim()
-    .replace(/[０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0))
-    .replace(/[、。\s]/g,"");
-  if(t==="") return null;
-  // 「ナンバー3」「ナンバースリー」「No3」→ No.3
-  t=t.replace(/ナンバー|なんばー|ﾅﾝﾊﾞｰ|number|Number|NO|no|Ｎｏ/gi,"No.");
-  t=t.replace(/ゼロ|ぜろ/g,"0").replace(/ワン|わん/g,"1").replace(/ツー|つー/g,"2")
-     .replace(/スリー|すりー/g,"3").replace(/フォー|ふぉー/g,"4").replace(/ファイブ|ふぁいぶ/g,"5")
-     .replace(/シックス|しっくす/g,"6").replace(/セブン|せぶん/g,"7")
-     .replace(/エイト|えいと/g,"8").replace(/ナイン|ないん/g,"9");
-  t=t.replace(/No\.\./g,"No.").replace(/No(\d)/g,"No.$1");
-  // 「ケービーエム」「けーびーえむ」→ KBM
-  t=t.replace(/ケービーエム|けーびーえむ|KBM|kbm/gi,"KBM");
-  t=t.replace(/ビーエム|びーえむ/gi,"BM");
-  // プラス杭「No.3プラス5」「ナンバー3プラ5」→ No.3+5
-  t=t.replace(/プラス|ぷらす|プラっす/g,"+");
-  t=t.replace(/プラ|ぷら|ﾌﾟﾗ/g,"+");
-  t=t.replace(/\+\+/g,"+");
-  return t;
-}
-// 日本語の読み上げを数値に変換
-const KANA_DIGIT={
-  "ゼロ":"0","れい":"0","レイ":"0","まる":"0","マル":"0","0":"0",
-  "いち":"1","イチ":"1","ひと":"1","1":"1",
-  "に":"2","ニ":"2","2":"2",
-  "さん":"3","サン":"3","3":"3",
-  "よん":"4","ヨン":"4","し":"4","4":"4",
-  "ご":"5","ゴ":"5","5":"5",
-  "ろく":"6","ロク":"6","6":"6",
-  "なな":"7","ナナ":"7","しち":"7","7":"7",
-  "はち":"8","ハチ":"8","8":"8",
-  "きゅう":"9","キュウ":"9","く":"9","9":"9"
-};
-function parseNumber(text){
-  let t=String(text).trim();
-  // 全角→半角、不要語の除去
-  t=t.replace(/[０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0))
-     .replace(/[．。・]/g,".")
-     .replace(/[、\s]/g,"")
-     .replace(/メートル|ミリ|めーとる|センチ/g,"");
-  // 素直に数値として読めるか
-  let m=t.match(/-?\d+(\.\d+)?/);
-  if(m && /^\D{0,2}-?\d/.test(t)) return parseFloat(m[0]);
-  let s=t.replace(/てん|テン|点/g,".");
-  // 整数部の「じゅう/ひゃく」などの漢数読みを数字化
-  s=s.replace(/ひゃく|ヒャク|百/g,"100").replace(/じゅう|ジュウ|十/g,"10");
-  let out="",i=0;
-  while(i<s.length){
-    if(s[i]==="."){ out+="."; i++; continue; }
-    let hit=null;
-    for(const k of Object.keys(KANA_DIGIT).sort((a,b)=>b.length-a.length)){
-      if(s.startsWith(k,i)){ hit=k; break; }
-    }
-    if(hit){ out+=KANA_DIGIT[hit]; i+=hit.length; }
-    else{ i++; }
-  }
-  if(out===""||out===".") return null;
-  const v=parseFloat(out);
-  return isFinite(v)? v : null;
-}
-function startVoice(col){
-  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-  if(!SR){ showSnack("この端末では音声入力が使えません"); return; }
-  voiceCol=col;
-  voiceRow = (col==="plan"||col==="fs")? 1 : 0; // 計画高・FSはKBM行が対象外
-  closeCalc();
-  document.getElementById("voicepad").classList.add("show");
-  document.getElementById("tb").classList.add("pickmode");
-  if(document.activeElement) document.activeElement.blur();
-  updateVoiceTarget();
-  document.getElementById("voiceDisp").textContent="マイクを押して話してください";
-  document.getElementById("voiceHeard").textContent="";
-  document.getElementById("voiceHint").textContent = (col==="name")
-    ? "例:「ケービーエム」「ナンバー3 プラ 5」／ 聞き取り後、確定ボタンで入力されます"
-    : "例:「いち てん ごー まる まる」「1.500」／ 聞き取り後、確定ボタンで入力されます";
-  pendingVal=null;
-  document.getElementById("voiceOk").disabled=true;
-}
-function updateVoiceTarget(){
-  document.getElementById("voiceTarget").textContent=
-    (VCOLNAME[voiceCol]||voiceCol)+" を音声入力";
-  document.getElementById("voiceCol").value=voiceCol;
-  // 行の選択リストを作成(入力できない行は除外)
-  const sel=document.getElementById("voiceRowSel");
-  let opts="";
-  rows.forEach((r,i)=>{
-    if(voiceCol==="plan" && i===0) return;
-    if(voiceCol==="fs" && i===0) return;
-    opts+=`<option value="${i}" ${i===voiceRow?"selected":""}>${(r.name||("行"+(i+1))).replace(/</g,"&lt;")}</option>`;
-  });
-  sel.innerHTML=opts;
-  sel.value=String(voiceRow);
-  document.querySelectorAll("#tb tr").forEach((tr,i)=>{
-    tr.style.background = (i===voiceRow)? "#E3F0FB" : "";
-  });
-}
-function setVoiceRow(v){
-  voiceRow=parseInt(v,10);
-  pendingVal=null;
-  const ok=document.getElementById("voiceOk");
-  if(ok) ok.disabled=true;
-  updateVoiceTarget();
-  // 対象の行が画面に見えるようスクロール
-  const tr=document.querySelectorAll("#tb tr")[voiceRow];
-  if(tr) tr.scrollIntoView({block:"center",behavior:"smooth"});
-}
-function moveVoiceRow(d){
-  let n=voiceRow+d;
-  const min=(voiceCol==="plan"||voiceCol==="fs")? 1 : 0;
-  if(n<min) n=min;
-  if(n>=rows.length){ addRows(5); render(); calc(); }
-  if(n>=rows.length) n=rows.length-1;
-  voiceRow=n;
-  setVoiceRow(String(n));
-}
-function changeVoiceCol(col){
-  voiceCol=col;
-  const min=(col==="plan"||col==="fs")? 1 : 0;
-  if(voiceRow<min) voiceRow=min;
-  document.getElementById("voiceHint").textContent = (col==="name")
-    ? "例:「ケービーエム」「ナンバー3 プラ 5」／ 聞き取り後、確定ボタンで入力されます"
-    : "例:「いち てん ごー まる まる」「1.500」／ 聞き取り後、確定ボタンで入力されます";
-  updateVoiceTarget();
-}
-function toggleVoice(){ listening? stopListen() : startListen(); }
-function startListen(){
-  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-  if(!SR) return;
-  rec=new SR();
-  rec.lang="ja-JP";
-  rec.continuous=true;
-  rec.interimResults=true;
-  rec.onresult=e=>{
-    for(let i=e.resultIndex;i<e.results.length;i++){
-      const txt=e.results[i][0].transcript;
-      document.getElementById("voiceHeard").textContent="「"+txt+"」";
-      if(e.results[i].isFinal){
-        if(voiceCol==="name"){
-          const nm=parsePointName(txt);
-          if(nm){ pendVoice(nm); }
-          else{ document.getElementById("voiceDisp").textContent="聞き取れませんでした"; }
-        }else{
-          const v=parseNumber(txt);
-          if(v!=null){ pendVoice(v); }
-          else{ document.getElementById("voiceDisp").textContent="数値として聞き取れませんでした"; }
-        }
-      }
-    }
-  };
-  rec.onerror=ev=>{
-    listening=false; setMicUI();
-    document.getElementById("voiceDisp").textContent =
-      (ev.error==="not-allowed")? "マイクの使用を許可してください" : "認識できませんでした。もう一度お試しください";
-  };
-  rec.onend=()=>{ if(listening){ try{rec.start();}catch(e){} } };
-  try{ rec.start(); listening=true; setMicUI();
-    document.getElementById("voiceDisp").textContent="聞き取り中…数値を話してください";
-  }catch(e){ showSnack("マイクを起動できませんでした"); }
-}
-function stopListen(){
-  listening=false;
-  if(rec){ try{rec.stop();}catch(e){} }
-  setMicUI();
-  document.getElementById("voiceDisp").textContent="停止しました";
-}
-function setMicUI(){
-  const b=document.getElementById("voiceMic");
-  b.classList.toggle("listening",listening);
-  b.textContent=listening? "■ 停止" : "🎤 話す";
-}
-// 聞き取った値を保留(まだセルには入れない)
-function pendVoice(v){
-  pendingVal = (voiceCol==="name")? String(v) : (Math.round(v*1000)/1000).toFixed(3);
-  const nm = rows[voiceRow]? (rows[voiceRow].name||("行"+(voiceRow+1))) : "";
-  document.getElementById("voiceDisp").innerHTML=
-    `<div style="font-size:12px;color:#777">${nm} の ${VCOLNAME[voiceCol]||voiceCol}</div>
-     <b style="font-size:26px;color:#1D5FA8">${pendingVal}</b>
-     <div style="font-size:12px;color:#777">確定ボタンで入力／言い直しも可</div>`;
-  document.getElementById("voiceOk").disabled=false;
-}
-function confirmVoice(){
-  if(pendingVal==null) return;
-  applyVoice(pendingVal);
-  pendingVal=null;
-  document.getElementById("voiceOk").disabled=true;
-}
-function applyVoice(v){
-  if(voiceRow>=rows.length) addRows(5);
-  syncCur();
-  undoStack.push(JSON.stringify(store));
-  if(undoStack.length>20) undoStack.shift();
-  redoStack=[];
-  rows[voiceRow][voiceCol]=String(v);
-  voiceRow++;
-  if(voiceRow>=rows.length) addRows(5);
-  render(); calc(); saveStore();
-  updateVoiceTarget();
-  document.getElementById("voiceDisp").innerHTML=
-    `<span style="color:var(--green-d);font-weight:700">✓ ${v} を入力しました</span><br>
-     <span style="font-size:13px;color:#777">次:${rows[voiceRow]?(rows[voiceRow].name||("行"+(voiceRow+1))):""}</span>`;
-  document.getElementById("voiceHeard").textContent="";
-  const tr=document.querySelectorAll("#tb tr")[voiceRow];
-  if(tr) tr.scrollIntoView({block:"center",behavior:"smooth"});
-}
-function stopVoice(){
-  stopListen();
-  document.getElementById("voicepad").classList.remove("show");
-  document.getElementById("tb").classList.remove("pickmode");
-  document.querySelectorAll("#tb tr").forEach(tr=>tr.style.background="");
-  voiceCol=null;
-}
-
-/* ===== PWA(アプリとしてインストール・オフライン動作) ===== */
-(function(){
-  // Service Worker は同一オリジンの実ファイル(sw.js)から登録する
-  // ※blob URL からの登録はブラウザ仕様で禁止されているため不可
-  if("serviceWorker" in navigator && window.isSecureContext){
-    window.addEventListener("load",()=>{
-      navigator.serviceWorker.register("sw.js")
-        .then(reg=>{
-          window.__swReady=true;
-          reg.addEventListener("updatefound",()=>{
-            const nw=reg.installing;
-            if(!nw) return;
-            nw.addEventListener("statechange",()=>{
-              if(nw.state==="installed" && navigator.serviceWorker.controller){
-                if(typeof showSnack==="function") showSnack("新しいバージョンがあります(閉じて開き直すと更新)");
-              }
-            });
-          });
-        })
-        .catch(err=>{ window.__swError=String(err); });
-    });
-  }
-
-  // インストールボタン
-  let deferred=null;
-  window.addEventListener("beforeinstallprompt",e=>{
-    e.preventDefault(); deferred=e;
-    const b=document.getElementById("installBtn");
-    if(b) b.style.display="inline-block";
-  });
-  window.installApp=function(){
-    if(deferred){
-      deferred.prompt();
-      deferred.userChoice.finally(()=>{ deferred=null;
-        const b=document.getElementById("installBtn"); if(b) b.style.display="none"; });
-    }else{
-      showSnack("メニュー(⋮)の「アプリをインストール」から追加できます");
-    }
-  };
-  window.addEventListener("appinstalled",()=>{
-    const b=document.getElementById("installBtn"); if(b) b.style.display="none";
-  });
-
-  // オフライン対応の状態確認
-  window.checkOffline=function(){
-    if(location.protocol==="file:"){
-      showSnack("ファイルを直接開いています。GitHubのURLから開いてください"); return;
-    }
-    if(!("serviceWorker" in navigator)){ showSnack("この端末は非対応です"); return; }
-    navigator.serviceWorker.getRegistration().then(reg=>{
-      if(reg && navigator.serviceWorker.controller){
-        caches.has("yacho-v4").then(ok=>{
-          showSnack(ok? "✓ オフライン対応ずみ(電波が無くても起動します)"
-                      : "準備中です。数秒後にもう一度お試しください");
-        });
-      }else if(reg){
-        showSnack("準備中です。一度閉じて開き直してください");
-      }else{
-        showSnack("オフライン未対応"+(window.__swError? "："+window.__swError : "。ページを再読み込みしてください"));
-      }
-    });
-  };
-})();
-
-/* ===== バックアップ ===== */
-function exportBackup(){
-  syncCur();
-  const data={app:"suijun_yacho",version:1,exported:new Date().toISOString(),store:store};
-  const blob=new Blob([JSON.stringify(data,null,1)],{type:"application/json"});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement("a");
-  const d=new Date();
-  const stamp=d.getFullYear()+String(d.getMonth()+1).padStart(2,"0")+String(d.getDate()).padStart(2,"0")
-    +"_"+String(d.getHours()).padStart(2,"0")+String(d.getMinutes()).padStart(2,"0");
-  a.href=url; a.download="yacho_backup_"+stamp+".json";
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(()=>URL.revokeObjectURL(url),1000);
-  const cnt=Object.keys(store.projects).length;
-  showSnack("バックアップを書き出しました(工事"+cnt+"件)");
-}
-let importData=null;
-function importBackup(el){
-  const f=el.files&&el.files[0];
-  el.value="";
-  if(!f) return;
-  const rd=new FileReader();
-  rd.onload=()=>{
-    try{
-      const j=JSON.parse(rd.result);
-      const st=j.store||j;
-      if(!st.projects) throw new Error("形式が違います");
-      importData=st;
-      const pn=Object.keys(st.projects).length;
-      let dn=0; Object.values(st.projects).forEach(p=>{ dn+=Object.keys(p.dates||{}).length; });
-      const when=j.exported? new Date(j.exported).toLocaleString("ja-JP"):"日時不明";
-      document.getElementById("importMsg").textContent=
-        `読み込むファイル: 工事${pn}件・日付データ${dn}件(書き出し ${when})`;
-      document.getElementById("importDlg").classList.add("show");
-    }catch(err){
-      showSnack("読み込めませんでした(ファイル形式を確認してください)");
-    }
-  };
-  rd.onerror=()=>showSnack("ファイルを開けませんでした");
-  rd.readAsText(f);
-}
-function applyImport(merge){
-  if(!importData){ closeDlg("importDlg"); return; }
-  pushUndo();
-  if(merge){
-    Object.entries(importData.projects).forEach(([id,p])=>{
-      const nid = store.projects[id]? (id+"_i"+Date.now()+Math.random().toString(36).slice(2,5)) : id;
-      store.projects[nid]=p;
-    });
-  }else{
-    store={projects:importData.projects,currentId:importData.currentId};
-  }
-  if(!store.projects[store.currentId]) store.currentId=Object.keys(store.projects)[0];
-  importData=null;
-  closeDlg("importDlg");
-  // 先に保存してから移行処理を通す(旧形式のバックアップにも対応)
-  try{ localStorage.setItem(STORE,JSON.stringify(store)); }catch(e){}
-  loadStore();
-  applyDate(); renderProjSel(); saveStore();
-  showSnack(merge? "バックアップを追加しました" : "バックアップを復元しました");
-}
-
-/* ===== 電卓 ===== */
-let calcOpen=false, calcRow=null, calcCol=null, calcExpr="";
-const COLNAME={bs:"BS(後視)",fs:"FS(前視)",plan:"計画高",gh0:"基準標高"};
-let cellPressTimer=null, cellLongFired=false;
-function cellPress(i,col){
-  cellPressCancel();
-  cellLongFired=false;
-  if(selMode) return;
-  // 入力できないセルは対象外
-  if(col==="plan" && i===0) return;
-  if(col==="fs" && i===0) return;
-  if(col==="gh0" && i!==0) return;
-  cellPressTimer=setTimeout(()=>{ cellLongFired=true; openCalc(i,col); },600);
-}
-function cellPressCancel(){ clearTimeout(cellPressTimer); }
-function cellPressEnd(e,i,col){
-  cellPressCancel();
-  if(cellLongFired){ e.preventDefault(); cellLongFired=false; return; }
-  // 音声入力中はタップで入力先を指定
-  if(voiceCol){
-    e.preventDefault();
-    const min=(voiceCol==="plan"||voiceCol==="fs")? 1 : 0;
-    if(i>=min){ voiceCol = (col==="gh0")? voiceCol : col; setVoiceRow(String(i)); updateVoiceTarget(); }
-    return;
-  }
-  // 電卓が開いていればタップで値を取り込む
-  if(calcOpen){
-    e.preventDefault();
-    const el=e.currentTarget.querySelector("input");
-    const v = el? el.value : (e.currentTarget.textContent||"").trim();
-    takeValue(v);
-  }
-}
-function openCalc(i,col){
-  cellPressCancel();
-  calcOpen=true; calcRow=i; calcCol=col;
-  const cur=rows[i][col]||"";
-  calcExpr = cur!==""? String(cur) : "";
-  document.getElementById("calcTarget").textContent=
-    (rows[i].name||("行"+(i+1)))+" の "+(COLNAME[col]||col)+" を計算";
-  document.getElementById("calcpad").classList.add("show");
-  document.getElementById("tb").classList.add("pickmode");
-  if(document.activeElement) document.activeElement.blur();
-  drawCalc();
-}
-function closeCalc(){
-  calcOpen=false; calcRow=null; calcCol=null; calcExpr="";
-  document.getElementById("calcpad").classList.remove("show");
-  document.getElementById("tb").classList.remove("pickmode");
-}
-// セルの数値を式に取り込む
-function takeValue(v){
-  const n=parseFloat(String(v).replace(/[^0-9.\-]/g,""));
-  if(isNaN(n)) return;
-  // 直前が数字なら演算子なしで置き換えず、末尾が演算子または空なら追加
-  if(calcExpr==="" || /[+\-*/]$/.test(calcExpr)){ calcExpr+=n; }
-  else{ calcExpr=String(n); }
-  drawCalc();
-}
-// 計算値セル(IH・読み)のタップ取り込み
-function pickCalcValue(td){
-  if(!calcOpen) return;
-  takeValue((td.textContent||"").trim());
-}
-function ck(c){
-  if(/[+\-*/]/.test(c)){
-    if(calcExpr==="") return;
-    if(/[+\-*/]$/.test(calcExpr)) calcExpr=calcExpr.slice(0,-1);
-    calcExpr+=c;
-  }else{
-    calcExpr+=c;
-  }
-  drawCalc();
-}
-function calcBack(){ calcExpr=calcExpr.slice(0,-1); drawCalc(); }
-function calcClear(){ calcExpr=""; drawCalc(); }
-function calcResult(){
-  if(calcExpr==="") return null;
-  const e=calcExpr.replace(/[+\-*/]$/,"");
-  if(!/^[0-9.+\-*/() ]+$/.test(e)) return null;
-  try{ const r=Function('"use strict";return('+e+')')(); return isFinite(r)? r : null; }catch(err){ return null; }
-}
-function calcEq(){
-  const r=calcResult();
-  if(r==null) return;
-  calcExpr=String(Math.round(r*1000)/1000);
-  drawCalc();
-}
-function calcApply(){
-  const r=calcResult();
-  if(r==null || calcRow==null) return;
-  const v=(Math.round(r*1000)/1000).toFixed(3);
-  syncCur();
-  undoStack.push(JSON.stringify(store));
-  if(undoStack.length>20) undoStack.shift();
-  redoStack=[];
-  rows[calcRow][calcCol]=v;
-  closeCalc();
-  render(); calc(); saveStore();
-}
-function drawCalc(){
-  const d=document.getElementById("calcDisp");
-  const r=calcResult();
-  const shown=calcExpr===""? "0" : calcExpr;
-  d.innerHTML = (r!=null && /[+\-*/]/.test(calcExpr))
-    ? `<span style="font-size:15px;color:#888">${shown} =</span> ${Math.round(r*1000)/1000}`
-    : shown;
-}
-/* ===== セル編集の取り消し記録 ===== */
-// 入力欄にカーソルが入った時点の状態を覚えておき、値が変わって離れたら履歴に積む
-let editSnap=null, editVal=null, editEl=null;
-document.addEventListener("focusin",e=>{
-  const t=e.target;
-  if(t.matches && t.matches("#tb input, #knownH, #routeKm")){
-    syncCur();
-    editSnap=JSON.stringify(store);
-    editVal=t.value;
-    editEl=t;
-  }
-});
-document.addEventListener("focusout",e=>{
-  if(e.target===editEl){
-    if(editSnap && e.target.value!==editVal){
-      undoStack.push(editSnap);
-      if(undoStack.length>20) undoStack.shift();
-      redoStack=[]; // 新しい編集をしたら進む履歴はクリア
-    }
-    editSnap=null; editVal=null; editEl=null;
-  }
-});
-function renameProject(name){
-  const p=curProj();
-  if(p){ p.name=name; renderProjSel(); saveStore(); }
-}
-
-function tab(i){
-  document.getElementById("t0").classList.toggle("on",i===0);
-  document.getElementById("t1").classList.toggle("on",i===1);
-  document.getElementById("p0").classList.toggle("on",i===0);
-  document.getElementById("p1").classList.toggle("on",i===1);
-}
-function addRows(n){
-  for(let k=0;k<n;k++) rows.push({name:"No."+(rows.length-1),bs:"",fs:"",gh0:"",plan:""});
-  render(); calc(); saveStore();
-}
-function upd(i,k,v){ rows[i][k]=v; calc(); saveStore(); }
-
-// 測点セル長押しで選択モード開始
-let pressTimer=null, selMode=false, selected=new Set();
-function rowPress(i){
-  rowPressCancel();
-  pressTimer=setTimeout(()=>{ enterSel(i); },600);
-}
-function rowPressCancel(){ clearTimeout(pressTimer); }
-function enterSel(i){
-  rowPressCancel();
-  selMode=true;
-  selected.add(i);
-  updateSelView();
-}
-function selTap(i){
-  // 音声入力中は入力先の指定
-  if(voiceCol){ voiceCol="name"; setVoiceRow(String(i)); updateVoiceTarget(); return; }
-  if(!selMode) return;
-  if(selected.has(i)){ selected.delete(i); } else { selected.add(i); }
-  if(selected.size===0){ exitSel(); return; }
-  updateSelView();
-}
-function exitSel(){
-  selMode=false; selected.clear();
-  updateSelView();
-}
-function updateSelView(){
-  const tb=document.getElementById("tb");
-  tb.classList.toggle("selmode",selMode);
-  tb.querySelectorAll("tr").forEach((tr,i)=>{
-    tr.classList.toggle("selrow",selected.has(i));
-  });
-  const bar=document.getElementById("selbar");
-  if(selMode){
-    document.getElementById("selCount").textContent=selected.size+"行選択中";
-    bar.classList.add("show");
-  }else{
-    bar.classList.remove("show");
-  }
-}
-// 選択した行のすぐ下に空行を挿入
-function insertBelowSelected(){
-  if(selected.size===0) return;
-  const first=[...selected].sort((a,b)=>a-b)[0];
-  [...selected].sort((a,b)=>b-a).forEach(i=>{
-    rows.splice(i+1,0,{name:"",bs:"",fs:"",gh0:"",plan:""});
-  });
-  exitSel();
-  render(); calc(); saveStore();
-  const el=document.querySelectorAll(".ptname")[first+1];
-  if(el){ el.focus(); }
-}
-
-function openDelSelDlg(){
-  if(selected.size===0) return;
-  const names=[...selected].sort((a,b)=>a-b).map(i=>rows[i].name||("("+(i+1)+"行目)")).join("、");
-  document.getElementById("delRowMsg").textContent=`選択した${selected.size}行(${names})を削除します。入力した値も消えます。`;
-  document.getElementById("delRowDlg").classList.add("show");
-}
-function confirmDelRow(){
-  pushUndo();
-  const n=selected.size;
-  [...selected].sort((a,b)=>b-a).forEach(i=>rows.splice(i,1));
-  if(rows.length===0) rows=blankRows();
-  closeDlg("delRowDlg");
-  exitSel();
-  render(); calc(); saveStore();
-  showSnack(n+"行を削除しました");
-}
-function num(v){ const n=parseFloat(v); return isNaN(n)?null:n; }
-function f3(v){ return v==null?"":v.toFixed(3); }
+function fmt(x,d){return Number(x).toFixed(d)}
 
 function render(){
-  const tb=document.getElementById("tb");
-  tb.innerHTML=rows.map((r,i)=>`
-    <tr>
-      <td class="rownum" ontouchstart="rowPress(${i})" ontouchend="rowPressCancel()" ontouchmove="rowPressCancel()" onclick="selTap(${i})" oncontextmenu="enterSel(${i});return false">
-        <input type="text" class="ptname" value="${r.name}" placeholder="測点" oninput="upd(${i},'name',this.value)">
-      </td>
-      <td ${cellEvt(i,'bs')}><input type="number" inputmode="decimal" step="0.001" value="${r.bs}" data-col="bs" data-row="${i}" oninput="upd(${i},'bs',this.value)"></td>
-      <td class="calc" id="ih${i}" ${pickEvt(i,'ih')}></td>
-      <td ${cellEvt(i,'fs')}>${i===0?"":`<input type="number" inputmode="decimal" step="0.001" value="${r.fs}" data-col="fs" data-row="${i}" enterkeyhint="next" onkeydown="nextCell(event,${i},'fs')" oninput="updMove(${i},'fs',this)">`}</td>
-      <td ${cellEvt(i,'gh0')}>${i===0
-        ?`<input type="number" inputmode="decimal" step="0.001" value="${r.gh0}" data-col="gh0" data-row="${i}" placeholder="基準標高" oninput="upd(${i},'gh0',this.value)" style="color:var(--ink)">`
-        :`<span class="calc" style="display:block;text-align:right;padding:0 4px" id="gh${i}"></span>`}</td>
-      <td ${cellEvt(i,'plan')}>${i===0
-        ?`<span style="display:block;text-align:center;color:#BBB">─</span>`
-        :`<input type="number" inputmode="decimal" step="0.001" value="${r.plan}" data-col="plan" data-row="${i}" enterkeyhint="next" onkeydown="nextCell(event,${i},'plan')" oninput="updMove(${i},'plan',this)">`}</td>
-      <td class="calc reading" id="rd${i}" ${pickEvt(i,'rd')}></td>
-      <td class="calc" id="df${i}"></td>
-    </tr>`).join("");
-}
-// 入力セル: 長押しで電卓、電卓中はタップで値を取り込み
-function cellEvt(i,col){
-  return `ontouchstart="cellPress(${i},'${col}')" ontouchend="cellPressEnd(event,${i},'${col}')" ontouchmove="cellPressCancel()" oncontextmenu="openCalc(${i},'${col}');return false"`;
-}
-// 計算値セル: 電卓中はタップで値を取り込み
-function pickEvt(i,kind){
-  return `onclick="pickCalcValue(this)"`;
+ const site=cur();
+ document.getElementById('siteBtn').textContent=site.name+' ▾';
+ const html=site.rows.map(r=>`<div class="card" data-id="${r.id}">
+  <div class="top"><input class="nm" data-f="name" value="${esc(r.name)}" enterkeyhint="next" aria-label="名称">
+  <div class="area"><span class="v">—</span><small>m²</small></div>
+  <button class="del" aria-label="削除">✕</button></div>
+  <div class="sides">
+   <label>辺 a<input data-f="a" inputmode="decimal" enterkeyhint="next" value="${esc(r.a)}"></label>
+   <label>辺 b<input data-f="b" inputmode="decimal" enterkeyhint="next" value="${esc(r.b)}"></label>
+   <label>辺 c<input data-f="c" inputmode="decimal" enterkeyhint="next" value="${esc(r.c)}"></label>
+  </div><div class="info"></div></div>`).join('');
+ document.getElementById('list').innerHTML=html||'<p style="color:var(--sub);text-align:center;margin-top:40px">「＋ 三角形」で追加してください</p>';
+ site.rows.forEach(updateRow);
+ updateTotal();
 }
 
-// Enter(次へ)キーで同じ列の下のセルへ移動
-function nextCell(e,i,col){
-  if(e.key!=="Enter" && e.keyCode!==13) return;
-  e.preventDefault();
-  focusNext(i,col);
-}
-// 下の同じ列のセルへフォーカス移動
-function focusNext(i,col){
-  for(let j=i+1;j<rows.length;j++){
-    const el=document.querySelector(`input[data-col="${col}"][data-row="${j}"]`);
-    if(el){ el.focus(); el.select&&el.select(); return; }
-  }
-  const cur=document.querySelector(`input[data-col="${col}"][data-row="${i}"]`);
-  if(cur) cur.blur(); // 最終行なら閉じる
-}
-// 入力+小数3桁そろったら自動で下へ
-function updMove(i,col,el){
-  upd(i,col,el.value);
-  if(/\.\d{3}$/.test(el.value)){ focusNext(i,col); }
+function updateRow(r){
+ const el=document.querySelector(`.card[data-id="${r.id}"]`);if(!el)return;
+ const c=calc(r),d=st.digits,v=el.querySelector('.area .v'),info=el.querySelector('.info');
+ el.classList.toggle('bad',c.st==='err');info.classList.toggle('err',c.st==='err');
+ if(c.st==='ok'){
+  v.textContent=fmt(rnd(c.area,d),d);
+  info.textContent=`s=${fmt(c.s,3)}　s−a=${fmt(c.sa,3)}　s−b=${fmt(c.sb,3)}　s−c=${fmt(c.sc,3)}`;
+ }else{v.textContent='—';info.textContent=c.st==='err'?c.msg:''}
 }
 
-let ghArr=[], ihShown=[];
-function calc(){
-  let IH=null, sumBS=0, sumFS=0;
-  ghArr=[]; ihShown=[];
-  rows.forEach((r,i)=>{
-    const bs=num(r.bs), fs=num(r.fs);
-    let g=null, ihCell=null;
-
-    if(i===0){
-      g=num(r.gh0);
-      if(g!=null && bs!=null){ IH=g+bs; sumBS+=bs; ihCell=IH; }
-    }else{
-      if(IH!=null && fs!=null){ g=IH-fs; sumFS+=fs; }
-      // この測点での読みは現在のIHで計算 → その後もりかえ
-      if(g!=null && bs!=null){ IH=g+bs; sumBS+=bs; ihCell=IH; } // もりかえ点はIH表示
-    }
-    ghArr[i]=g; ihShown[i]= (i===0? ihCell : (ihCell!=null? ihCell : null));
-
-    // 表示更新
-    const ihEl=document.getElementById("ih"+i);
-    if(ihEl) ihEl.textContent = ihShown[i]!=null? f3(ihShown[i]) : "";
-    if(i>0){
-      const ghEl=document.getElementById("gh"+i);
-      if(ghEl) ghEl.textContent = f3(g);
-    }
-    const rdEl=document.getElementById("rd"+i);
-    const dfEl=document.getElementById("df"+i);
-    let readVal=null;
-    if(rdEl){
-      const plan=num(r.plan);
-      // 読みは「その測点を視準している時のIH」= もりかえ前のIH
-      let ihForRead = (i===0)? ihShown[0] : (function(){
-        // i行を視準しているIH = i行のGH計算に使ったIH
-        return (g!=null && num(r.fs)!=null)? g+num(r.fs) : (i===0? ihShown[0]: currentIHBefore(i));
-      })();
-      if(i===0) ihForRead=ihShown[0];
-      if(plan!=null && ihForRead!=null){ readVal=ihForRead-plan; }
-      rdEl.textContent = readVal!=null? f3(readVal) : "";
-    }
-    if(dfEl){
-      const fsv=num(r.fs);
-      if(readVal!=null && fsv!=null && i>0){
-        const d=readVal-fsv; // ＋:計画より高い(切土) −:計画より低い(盛土)
-        const mm=Math.round(d*1000);
-        if(mm===0){ dfEl.innerHTML='<span style="color:#2E8B57;font-weight:700">±0</span>'; }
-        else if(d>0){ dfEl.innerHTML=`<span style="color:#C0392B;font-weight:700">+${d.toFixed(3)}<small style="font-size:10px"> 高</small></span>`; }
-        else{ dfEl.innerHTML=`<span style="color:#1D5FA8;font-weight:700">${d.toFixed(3)}<small style="font-size:10px"> 低</small></span>`; }
-      }else{ dfEl.textContent=""; }
-    }
-  });
-
-  // 検算
-  const g0=num(rows[0].gh0);
-  const lastIdx=(()=>{for(let i=rows.length-1;i>=0;i--){if(ghArr[i]!=null)return i;}return -1;})();
-  const last=lastIdx>=0?ghArr[lastIdx]:null;
-  const cs=document.getElementById("checksum");
-  if(g0!=null && last!=null && lastIdx>0){
-    const d1=sumBS-sumFS, d2=last-g0;
-    cs.innerHTML=`検算 ΣBS−ΣFS = <b>${d1.toFixed(3)}</b> ／ 最終GH−起点GH = <b>${d2.toFixed(3)}</b> ${Math.abs(d1-d2)<0.0005?"✔ 一致":"✖ 不一致"}`;
-  }else{
-    cs.textContent="測点1にBSと基準標高(GH)、以降の測点にFSを入力すると自動計算します。もりかえ点は同じ行にFSとBSを両方入力してください。";
-  }
-
-  // ===== 誤差補正 =====
-  document.getElementById("lastGH").textContent = last!=null? last.toFixed(3)+" m":"─";
-  const known=num(document.getElementById("knownH").value);
-  let E=null;
-  if(known!=null && last!=null) E=last-known;
-  document.getElementById("closure").textContent = E!=null? (E>=0?"+":"")+(E*1000).toFixed(1)+" mm":"─";
-
-  const k=parseFloat(document.getElementById("grade").value);
-  const S=num(document.getElementById("routeKm").value);
-  const tolEl=document.getElementById("tolerance"), vEl=document.getElementById("verdict");
-  if(S!=null && S>0){
-    const tol=k*Math.sqrt(S);
-    tolEl.textContent="±"+tol.toFixed(1)+" mm";
-    if(E!=null){
-      const ok=Math.abs(E*1000)<=tol;
-      vEl.textContent=ok?"合格":"不合格(再測)";
-      vEl.className="badge "+(ok?"ok":"ng");
-    }else{vEl.textContent="閉合差未算出";vEl.className="badge na";}
-  }else{tolEl.textContent="─";vEl.textContent="未入力";vEl.className="badge na";}
-
-  const body=document.getElementById("corrBody");
-  if(E==null){
-    body.innerHTML=`<tr><td colspan="4" style="text-align:center;color:#888">既知標高を入力すると補正計算します</td></tr>`;
-    return;
-  }
-  const idx=[]; // GHが計算された測点(起点除く)
-  for(let i=1;i<rows.length;i++){ if(ghArr[i]!=null) idx.push(i); }
-  const total=idx.length;
-  let html=`<tr><td>${rows[0].name||"1"}</td><td>${f3(ghArr[0])}</td><td>±0.0mm</td><td class="adjv">${f3(ghArr[0])}</td></tr>`;
-  idx.forEach((i,j)=>{
-    const corr=-E*((j+1)/total);
-    const adj=ghArr[i]+corr;
-    html+=`<tr><td>${rows[i].name||i+1}</td><td>${f3(ghArr[i])}</td><td class="minus">${(corr*1000>=0?"+":"")+(corr*1000).toFixed(1)}mm</td><td class="adjv">${adj.toFixed(3)}</td></tr>`;
-  });
-  body.innerHTML=html;
+function totals(){
+ const d=st.digits;let sum=0,n=0,bad=0;
+ for(const r of cur().rows){const c=calc(r);if(c.st==='ok'){sum+=rnd(c.area,d);n++}else if(c.st==='err'||c.st==='partial')bad++}
+ return {sum:rnd(sum,d),n,bad};
+}
+function updateTotal(){
+ const t=totals(),d=st.digits;
+ document.getElementById('total').innerHTML=fmt(t.sum,d)+'<small> m²</small>';
+ document.getElementById('warn').textContent=t.bad?`未完成・エラー ${t.bad}件（合計に含まず）`:(t.n?`${t.n}個の三角形`:'');
 }
 
-// i行を視準している時点のIH(もりかえを順に再生)
-function currentIHBefore(i){
-  let IH=null;
-  const g0=num(rows[0].gh0), bs0=num(rows[0].bs);
-  if(g0!=null && bs0!=null) IH=g0+bs0;
-  for(let j=1;j<i;j++){
-    const fs=num(rows[j].fs), bs=num(rows[j].bs);
-    if(IH!=null && fs!=null && bs!=null){ IH=(IH-fs)+bs; }
-  }
-  return IH;
+// 入力
+const list=document.getElementById('list');
+list.addEventListener('input',e=>{
+ const inp=e.target,card=inp.closest('.card');if(!card||!inp.dataset.f)return;
+ const r=cur().rows.find(x=>x.id===card.dataset.id);if(!r)return;
+ r[inp.dataset.f]=inp.value;save();updateRow(r);updateTotal();
+});
+list.addEventListener('keydown',e=>{
+ if(e.key!=='Enter'||!e.target.dataset.f)return;
+ e.preventDefault();
+ const all=[...list.querySelectorAll('input[data-f]')],i=all.indexOf(e.target);
+ if(i<all.length-1){all[i+1].focus();all[i+1].select?.()}
+ else{addRow(true)}
+});
+list.addEventListener('click',e=>{
+ const b=e.target.closest('.del');if(!b)return;
+ const card=b.closest('.card'),rows=cur().rows,i=rows.findIndex(x=>x.id===card.dataset.id);if(i<0)return;
+ lastDeleted={siteId:st.currentId,row:rows[i],index:i};
+ rows.splice(i,1);save();render();
+ toast(`${lastDeleted.row.name} を削除しました`,'元に戻す',()=>{
+  const s=st.sites[lastDeleted.siteId];if(!s)return;
+  s.rows.splice(Math.min(lastDeleted.index,s.rows.length),0,lastDeleted.row);lastDeleted=null;save();render();
+ });
+});
+
+function nextName(){
+ const rows=cur().rows;let max=0;
+ rows.forEach(r=>{const m=/(\d+)\s*$/.exec(r.name);if(m)max=Math.max(max,+m[1])});
+ return max+1;
+}
+function addRow(focus){
+ const r=newRow(nextName());cur().rows.push(r);save();render();
+ const el=document.querySelector(`.card[data-id="${r.id}"] input[data-f="a"]`);
+ if(el){el.scrollIntoView({block:'center'});if(focus!==false)el.focus()}
+}
+document.getElementById('addBtn').onclick=()=>addRow(true);
+
+// トースト
+function toast(msg,act,fn){
+ const t=document.getElementById('toast'),b=document.getElementById('tact');
+ document.getElementById('tmsg').textContent=msg;
+ b.style.display=act?'':'none';b.textContent=act||'';
+ b.onclick=()=>{t.style.display='none';fn&&fn()};
+ t.style.display='flex';clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.style.display='none',act?6000:2500);
 }
 
-loadStore();
-applyDate();
-renderProjSel();
+// シート（独自ダイアログ：ホーム画面アプリでも動く）
+function sheet(build){
+ return new Promise(res=>{
+  const ov=document.createElement('div');ov.className='ov';
+  const sh=document.createElement('div');sh.className='sheet';ov.appendChild(sh);
+  const close=v=>{ov.remove();res(v)};
+  ov.addEventListener('click',e=>{if(e.target===ov)close(null)});
+  build(sh,close);document.body.appendChild(ov);
+  const f=sh.querySelector('input');if(f){f.focus();f.select()}
+ });
+}
+function ask(title,value){
+ return sheet((sh,close)=>{
+  sh.innerHTML=`<h2>${esc(title)}</h2><input value="${esc(value||'')}"><div class="row"><button data-v="0">キャンセル</button><button class="pri" data-v="1">OK</button></div>`;
+  const inp=sh.querySelector('input');
+  sh.querySelector('[data-v="0"]').onclick=()=>close(null);
+  sh.querySelector('[data-v="1"]').onclick=()=>close(inp.value.trim()||null);
+  inp.addEventListener('keydown',e=>{if(e.key==='Enter')close(inp.value.trim()||null)});
+ });
+}
+function confirmBox(msg,ok,danger){
+ return sheet((sh,close)=>{
+  sh.innerHTML=`<p>${msg}</p><div class="row"><button data-v="0">キャンセル</button><button class="${danger?'dng':'pri'}" data-v="1">${esc(ok||'OK')}</button></div>`;
+  sh.querySelector('[data-v="0"]').onclick=()=>close(false);
+  sh.querySelector('[data-v="1"]').onclick=()=>close(true);
+ });
+}
+
+// 区画の切替
+document.getElementById('siteBtn').onclick=()=>sheet((sh,close)=>{
+ const ids=Object.keys(st.sites).sort((a,b)=>(st.sites[b].updated||0)-(st.sites[a].updated||0));
+ sh.innerHTML='<h2>区画（工事）</h2><div class="list">'+ids.map(id=>{
+  const s=st.sites[id];return `<button data-id="${id}" class="${id===st.currentId?'on':''}">${esc(s.name)}　<span style="color:var(--sub);font-size:12px">${s.rows.length}個</span></button>`}).join('')+
+  '</div><div class="row"><button id="nw" class="pri">＋ 新しい区画</button></div>';
+ sh.querySelectorAll('.list button').forEach(b=>b.onclick=()=>{st.currentId=b.dataset.id;save();render();close()});
+ sh.querySelector('#nw').onclick=async()=>{close();const n=await ask('新しい区画の名前','区画'+(ids.length+1));if(!n)return;const id=uid();st.sites[id]=newSite(n);st.currentId=id;save();render()};
+});
+
+// メニュー
+document.getElementById('menuBtn').onclick=()=>sheet((sh,close)=>{
+ sh.innerHTML=`<h2>面積の小数桁（四捨五入）</h2>
+ <div class="seg">${[2,3,4].map(d=>`<button data-d="${d}" class="${st.digits===d?'on':''}">${d}桁</button>`).join('')}</div>
+ <h2 style="margin-top:12px">この区画</h2><div class="list">
+ <button data-a="print">求積表を印刷・PDF</button>
+ <button data-a="csv">CSVで保存</button>
+ <button data-a="rename">名前を変更</button>
+ <button data-a="dup">複製</button>
+ <button data-a="del" class="dng">区画を削除</button></div>
+ <h2 style="margin-top:12px">データ全体</h2><div class="list">
+ <button data-a="backup">バックアップを保存</button>
+ <button data-a="restore">バックアップを読み込む</button></div>`;
+ sh.querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>{st.digits=+b.dataset.d;save();render();close()});
+ sh.querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>{close();act(b.dataset.a)});
+});
+
+async function act(a){
+ const s=cur();
+ if(a==='rename'){const n=await ask('区画の名前',s.name);if(n){s.name=n;save();render()}}
+ else if(a==='dup'){const id=uid();st.sites[id]=JSON.parse(JSON.stringify(s));st.sites[id].name=s.name+'（コピー）';st.sites[id].rows.forEach(r=>r.id=uid());st.currentId=id;save();render();toast('複製しました')}
+ else if(a==='del'){
+  if(!await confirmBox(`「${esc(s.name)}」を削除します。元に戻せません。`,'削除する',true))return;
+  delete st.sites[st.currentId];
+  if(!Object.keys(st.sites).length){const id=uid();st.sites[id]=newSite('区画1')}
+  st.currentId=Object.keys(st.sites)[0];save();render();
+ }
+ else if(a==='print')printTable();
+ else if(a==='csv')saveCSV();
+ else if(a==='backup')backup();
+ else if(a==='restore')document.getElementById('fileIn').click();
+}
+
+function today(){const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`}
+function download(name,text,type){
+ const blob=new Blob([text],{type});const a=document.createElement('a');
+ a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();
+ setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1000);
+}
+function safeName(s){return s.replace(/[\\/:*?"<>|\s]+/g,'_')}
+
+function printTable(){
+ const s=cur(),d=st.digits,t=totals();
+ const rows=s.rows.map(r=>{const c=calc(r);
+  if(c.st==='ok')return `<tr><td class="n">${esc(r.name)}</td><td>${fmt(c.a,3)}</td><td>${fmt(c.b,3)}</td><td>${fmt(c.c,3)}</td><td>${fmt(c.s,3)}</td><td>${fmt(c.sa,3)}</td><td>${fmt(c.sb,3)}</td><td>${fmt(c.sc,3)}</td><td>${fmt(rnd(c.area,d),d)}</td></tr>`;
+  if(c.st==='empty')return '';
+  return `<tr><td class="n">${esc(r.name)}</td><td>${esc(r.a)}</td><td>${esc(r.b)}</td><td>${esc(r.c)}</td><td colspan="5" style="text-align:left">${c.st==='err'?esc(c.msg):'未入力あり'}</td></tr>`}).join('');
+ document.getElementById('print').innerHTML=`<h1>求積表（ヘロンの公式）</h1>
+ <div class="meta">区画：${esc(s.name)}　　作成日：${today()}</div>
+ <table><thead><tr><th>名称</th><th>a (m)</th><th>b (m)</th><th>c (m)</th><th>s</th><th>s−a</th><th>s−b</th><th>s−c</th><th>面積 (m²)</th></tr></thead>
+ <tbody>${rows}<tr class="tr"><td class="n" colspan="8">合計</td><td>${fmt(t.sum,d)}</td></tr></tbody></table>
+ <div class="note">S = √{s(s−a)(s−b)(s−c)}　s = (a+b+c)/2　各面積は小数${d}位に四捨五入し、その合計を記載。</div>`;
+ setTimeout(()=>window.print(),50);
+}
+
+function saveCSV(){
+ const s=cur(),d=st.digits,t=totals();
+ const q=v=>'"'+String(v??'').replace(/"/g,'""')+'"';
+ const lines=[['名称','a','b','c','s','s-a','s-b','s-c','面積(m2)'].map(q).join(',')];
+ s.rows.forEach(r=>{const c=calc(r);if(c.st==='empty')return;
+  lines.push(c.st==='ok'?[r.name,fmt(c.a,3),fmt(c.b,3),fmt(c.c,3),fmt(c.s,3),fmt(c.sa,3),fmt(c.sb,3),fmt(c.sc,3),fmt(rnd(c.area,d),d)].map(q).join(','):[r.name,r.a,r.b,r.c,'','','','',c.msg||'未入力あり'].map(q).join(','))});
+ lines.push([ '合計','','','','','','','',fmt(t.sum,d)].map(q).join(','));
+ download(`求積_${safeName(s.name)}_${today()}.csv`,'\ufeff'+lines.join('\r\n'),'text/csv');
+}
+
+function backup(){
+ download(`heron_backup_${today()}.json`,JSON.stringify({app:'heron',version:1,exported:new Date().toISOString(),store:st},null,1),'application/json');
+}
+document.getElementById('fileIn').addEventListener('change',async e=>{
+ const f=e.target.files[0];e.target.value='';if(!f)return;
+ let data;try{data=JSON.parse(await f.text())}catch(err){toast('ファイルを読めませんでした');return}
+ const store=data&&data.app==='heron'&&data.store;
+ if(!store||!store.sites){toast('このアプリのバックアップではありません');return}
+ const mode=await sheet((sh,close)=>{
+  sh.innerHTML=`<h2>バックアップの読み込み</h2><p>${Object.keys(store.sites).length}個の区画が入っています。</p><div class="list"><button data-m="merge" class="pri">今のデータに追加する</button><button data-m="replace" class="dng">すべて置き換える</button><button data-m="">キャンセル</button></div>`;
+  sh.querySelectorAll('[data-m]').forEach(b=>b.onclick=()=>close(b.dataset.m||null));
+ });
+ if(!mode)return;
+ if(mode==='replace'){st=store;localStorage.setItem(KEY,JSON.stringify(st));load()}
+ else{for(const k in store.sites){const id=st.sites[k]?uid():k;st.sites[id]=store.sites[k];if(!Array.isArray(st.sites[id].rows))st.sites[id].rows=[]}}
+ save();render();toast('読み込みました');
+});
+
+load();render();
+if('serviceWorker' in navigator&&window.isSecureContext){navigator.serviceWorker.register('sw.js').catch(()=>{})}
 </script>
 </body>
 </html>

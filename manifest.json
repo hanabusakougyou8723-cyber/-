@@ -3,7 +3,7 @@
   "short_name": "野帳",
   "description": "水準測量の野帳・計画高の読み逆算・誤差補正計算",
   "start_url": "./index.html",
-  "scope": "./",
+  "scope": "./index.html",
   "display": "standalone",
   "orientation": "any",
   "background_color": "#F2F2EE",

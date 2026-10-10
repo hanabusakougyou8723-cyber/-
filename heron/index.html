@@ -1,0 +1,344 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0d1319">
+<title>ヘロン求積</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<style>
+:root{--bg:#0d1319;--card:#16202a;--line:#263442;--text:#e8eef3;--sub:#8fa3b3;--acc:#34d3c4;--warn:#ff7a6b;--btn:#203040}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif}
+button{font:inherit;color:inherit;background:var(--btn);border:1px solid var(--line);border-radius:10px;padding:10px 14px;cursor:pointer}
+button:active{opacity:.7}
+input{font:inherit;color:var(--text);background:#0b1117;border:1px solid var(--line);border-radius:8px;padding:10px 8px;width:100%;min-width:0}
+input:focus{outline:2px solid var(--acc);border-color:transparent}
+header{position:sticky;top:0;z-index:5;background:var(--bg);display:flex;align-items:center;gap:8px;padding:10px 12px;padding-top:max(10px,env(safe-area-inset-top));border-bottom:1px solid var(--line)}
+header h1{font-size:16px;margin:0;color:var(--acc);white-space:nowrap}
+#siteBtn{flex:1;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:transparent}
+#menuBtn{width:44px;padding:10px 0;font-size:18px}
+main{padding:12px 12px 120px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px;margin-bottom:10px}
+.top{display:flex;gap:8px;align-items:center}
+.top .nm{flex:0 0 110px;font-weight:600}
+.area{flex:1;text-align:right;font-size:20px;font-weight:700;font-variant-numeric:tabular-nums}
+.area small{font-size:12px;color:var(--sub);font-weight:400;margin-left:2px}
+.del{width:40px;padding:8px 0;background:transparent;color:var(--sub)}
+.sides{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:8px}
+.sides label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--sub)}
+.sides input{text-align:right;font-size:18px;font-variant-numeric:tabular-nums}
+.info{font-size:12px;color:var(--sub);margin-top:6px;min-height:15px;font-variant-numeric:tabular-nums}
+.info.err{color:var(--warn)}
+.card.bad{border-color:var(--warn)}
+footer{position:fixed;left:0;right:0;bottom:0;background:#0a0f14;border-top:1px solid var(--line);display:flex;align-items:center;gap:10px;padding:10px 12px;padding-bottom:max(10px,env(safe-area-inset-bottom))}
+.tot{flex:1}
+.tot .l{font-size:12px;color:var(--sub)}
+.tot .v{font-size:26px;font-weight:800;color:var(--acc);font-variant-numeric:tabular-nums}
+.tot .v small{font-size:14px;color:var(--sub);font-weight:400}
+.tot .w{font-size:11px;color:var(--warn)}
+#addBtn{background:var(--acc);color:#04211e;border:0;font-weight:700;padding:14px 18px}
+.ov{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:20;display:flex;align-items:flex-end;justify-content:center}
+.sheet{background:var(--card);width:100%;max-width:520px;border-radius:16px 16px 0 0;padding:14px 14px max(14px,env(safe-area-inset-bottom));max-height:85vh;overflow:auto}
+.sheet h2{font-size:15px;margin:2px 0 10px;color:var(--sub);font-weight:600}
+.sheet .list button{display:block;width:100%;text-align:left;margin-bottom:6px}
+.sheet .list button.on{border-color:var(--acc);color:var(--acc)}
+.sheet .row{display:flex;gap:8px;margin-top:10px}
+.sheet .row button{flex:1}
+.sheet p{margin:4px 0 8px;line-height:1.6}
+.pri{background:var(--acc);color:#04211e;border:0;font-weight:700}
+.dng{color:var(--warn)}
+.seg{display:flex;gap:6px;margin-bottom:6px}.seg button{flex:1}.seg button.on{border-color:var(--acc);color:var(--acc)}
+#toast{position:fixed;left:50%;bottom:100px;transform:translateX(-50%);background:#e8eef3;color:#0d1319;padding:10px 14px;border-radius:10px;z-index:30;display:none;align-items:center;gap:12px;font-size:14px;max-width:92%}
+#toast button{background:transparent;border:0;color:#0a7d73;font-weight:700;padding:4px}
+#print{display:none}
+@media print{
+ body{background:#fff;color:#000}
+ header,main,footer,#toast,.ov{display:none!important}
+ #print{display:block;font-size:11pt;color:#000}
+ #print h1{font-size:15pt;margin:0 0 4px}
+ #print .meta{margin-bottom:8px}
+ #print table{border-collapse:collapse;width:100%}
+ #print th,#print td{border:1px solid #000;padding:4px 6px;text-align:right;font-variant-numeric:tabular-nums}
+ #print th{background:#eee;text-align:center}
+ #print td.n{text-align:left}
+ #print .tr td{font-weight:700}
+ #print .note{margin-top:6px;font-size:9pt}
+}
+</style>
+</head>
+<body>
+<header>
+ <h1>ヘロン求積</h1>
+ <button id="siteBtn"></button>
+ <button id="menuBtn" aria-label="メニュー">⋮</button>
+</header>
+<main id="list"></main>
+<footer>
+ <div class="tot"><div class="l">合計面積</div><div class="v" id="total">0<small> m²</small></div><div class="w" id="warn"></div></div>
+ <button id="addBtn">＋ 三角形</button>
+</footer>
+<div id="toast"><span id="tmsg"></span><button id="tact"></button></div>
+<div id="print"></div>
+<input type="file" id="fileIn" accept=".json,application/json" hidden>
+
+<script>
+const KEY='heron_v1';
+let st, lastDeleted=null, toastTimer=null;
+
+function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7)}
+function newRow(n){return {id:uid(),name:'No.'+n,a:'',b:'',c:''}}
+function newSite(name){return {name,rows:[newRow(1)],updated:Date.now()}}
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+
+function load(){
+ try{st=JSON.parse(localStorage.getItem(KEY))}catch(e){st=null}
+ if(!st||typeof st!=='object'||!st.sites||!Object.keys(st.sites).length){const id=uid();st={sites:{[id]:newSite('区画1')},currentId:id,digits:3}}
+ for(const k in st.sites){const s=st.sites[k];if(!Array.isArray(s.rows))s.rows=[];if(!s.name)s.name='区画'}
+ if(!st.sites[st.currentId])st.currentId=Object.keys(st.sites)[0];
+ if(![2,3,4].includes(st.digits))st.digits=3;
+}
+function save(){cur().updated=Date.now();try{localStorage.setItem(KEY,JSON.stringify(st))}catch(e){toast('保存できませんでした')}}
+function cur(){return st.sites[st.currentId]}
+
+// 全角数字・カンマも受け付ける
+function num(v){
+ if(v==null)return NaN;
+ let s=String(v).trim().replace(/[０-９]/g,d=>String.fromCharCode(d.charCodeAt(0)-0xFEE0)).replace(/[．。，,]/g,'.').replace(/[－ー−]/g,'-');
+ if(s==='')return NaN;
+ if(!/^-?\d*\.?\d+$|^-?\d+\.$/.test(s))return NaN;
+ return Number(s);
+}
+function rnd(x,d){const f=Math.pow(10,d);return Math.round((x+Math.abs(x)*Number.EPSILON*4)*f)/f}
+
+function calc(r){
+ const a=num(r.a),b=num(r.b),c=num(r.c);
+ const filled=[r.a,r.b,r.c].filter(v=>String(v??'').trim()!=='').length;
+ if(filled===0)return {st:'empty'};
+ if(isNaN(a)||isNaN(b)||isNaN(c)){
+  if(filled<3&&[r.a,r.b,r.c].every(v=>String(v??'').trim()===''||!isNaN(num(v))))return {st:'partial'};
+  return {st:'err',msg:'数値を確認してください'};
+ }
+ if(a<=0||b<=0||c<=0)return {st:'err',msg:'辺の長さは0より大きくしてください'};
+ const p=(a+b+c)*(-a+b+c)*(a-b+c)*(a+b-c);
+ if(p<=0)return {st:'err',msg:'三角形になりません（2辺の和が残り1辺以下）'};
+ const s=(a+b+c)/2;
+ return {st:'ok',a,b,c,s,sa:s-a,sb:s-b,sc:s-c,area:Math.sqrt(p)/4};
+}
+
+function fmt(x,d){return Number(x).toFixed(d)}
+
+function render(){
+ const site=cur();
+ document.getElementById('siteBtn').textContent=site.name+' ▾';
+ const html=site.rows.map(r=>`<div class="card" data-id="${r.id}">
+  <div class="top"><input class="nm" data-f="name" value="${esc(r.name)}" enterkeyhint="next" aria-label="名称">
+  <div class="area"><span class="v">—</span><small>m²</small></div>
+  <button class="del" aria-label="削除">✕</button></div>
+  <div class="sides">
+   <label>辺 a<input data-f="a" inputmode="decimal" enterkeyhint="next" value="${esc(r.a)}"></label>
+   <label>辺 b<input data-f="b" inputmode="decimal" enterkeyhint="next" value="${esc(r.b)}"></label>
+   <label>辺 c<input data-f="c" inputmode="decimal" enterkeyhint="next" value="${esc(r.c)}"></label>
+  </div><div class="info"></div></div>`).join('');
+ document.getElementById('list').innerHTML=html||'<p style="color:var(--sub);text-align:center;margin-top:40px">「＋ 三角形」で追加してください</p>';
+ site.rows.forEach(updateRow);
+ updateTotal();
+}
+
+function updateRow(r){
+ const el=document.querySelector(`.card[data-id="${r.id}"]`);if(!el)return;
+ const c=calc(r),d=st.digits,v=el.querySelector('.area .v'),info=el.querySelector('.info');
+ el.classList.toggle('bad',c.st==='err');info.classList.toggle('err',c.st==='err');
+ if(c.st==='ok'){
+  v.textContent=fmt(rnd(c.area,d),d);
+  info.textContent=`s=${fmt(c.s,3)}　s−a=${fmt(c.sa,3)}　s−b=${fmt(c.sb,3)}　s−c=${fmt(c.sc,3)}`;
+ }else{v.textContent='—';info.textContent=c.st==='err'?c.msg:''}
+}
+
+function totals(){
+ const d=st.digits;let sum=0,n=0,bad=0;
+ for(const r of cur().rows){const c=calc(r);if(c.st==='ok'){sum+=rnd(c.area,d);n++}else if(c.st==='err'||c.st==='partial')bad++}
+ return {sum:rnd(sum,d),n,bad};
+}
+function updateTotal(){
+ const t=totals(),d=st.digits;
+ document.getElementById('total').innerHTML=fmt(t.sum,d)+'<small> m²</small>';
+ document.getElementById('warn').textContent=t.bad?`未完成・エラー ${t.bad}件（合計に含まず）`:(t.n?`${t.n}個の三角形`:'');
+}
+
+// 入力
+const list=document.getElementById('list');
+list.addEventListener('input',e=>{
+ const inp=e.target,card=inp.closest('.card');if(!card||!inp.dataset.f)return;
+ const r=cur().rows.find(x=>x.id===card.dataset.id);if(!r)return;
+ r[inp.dataset.f]=inp.value;save();updateRow(r);updateTotal();
+});
+list.addEventListener('keydown',e=>{
+ if(e.key!=='Enter'||!e.target.dataset.f)return;
+ e.preventDefault();
+ const all=[...list.querySelectorAll('input[data-f]')],i=all.indexOf(e.target);
+ if(i<all.length-1){all[i+1].focus();all[i+1].select?.()}
+ else{addRow(true)}
+});
+list.addEventListener('click',e=>{
+ const b=e.target.closest('.del');if(!b)return;
+ const card=b.closest('.card'),rows=cur().rows,i=rows.findIndex(x=>x.id===card.dataset.id);if(i<0)return;
+ lastDeleted={siteId:st.currentId,row:rows[i],index:i};
+ rows.splice(i,1);save();render();
+ toast(`${lastDeleted.row.name} を削除しました`,'元に戻す',()=>{
+  const s=st.sites[lastDeleted.siteId];if(!s)return;
+  s.rows.splice(Math.min(lastDeleted.index,s.rows.length),0,lastDeleted.row);lastDeleted=null;save();render();
+ });
+});
+
+function nextName(){
+ const rows=cur().rows;let max=0;
+ rows.forEach(r=>{const m=/(\d+)\s*$/.exec(r.name);if(m)max=Math.max(max,+m[1])});
+ return max+1;
+}
+function addRow(focus){
+ const r=newRow(nextName());cur().rows.push(r);save();render();
+ const el=document.querySelector(`.card[data-id="${r.id}"] input[data-f="a"]`);
+ if(el){el.scrollIntoView({block:'center'});if(focus!==false)el.focus()}
+}
+document.getElementById('addBtn').onclick=()=>addRow(true);
+
+// トースト
+function toast(msg,act,fn){
+ const t=document.getElementById('toast'),b=document.getElementById('tact');
+ document.getElementById('tmsg').textContent=msg;
+ b.style.display=act?'':'none';b.textContent=act||'';
+ b.onclick=()=>{t.style.display='none';fn&&fn()};
+ t.style.display='flex';clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.style.display='none',act?6000:2500);
+}
+
+// シート（独自ダイアログ：ホーム画面アプリでも動く）
+function sheet(build){
+ return new Promise(res=>{
+  const ov=document.createElement('div');ov.className='ov';
+  const sh=document.createElement('div');sh.className='sheet';ov.appendChild(sh);
+  const close=v=>{ov.remove();res(v)};
+  ov.addEventListener('click',e=>{if(e.target===ov)close(null)});
+  build(sh,close);document.body.appendChild(ov);
+  const f=sh.querySelector('input');if(f){f.focus();f.select()}
+ });
+}
+function ask(title,value){
+ return sheet((sh,close)=>{
+  sh.innerHTML=`<h2>${esc(title)}</h2><input value="${esc(value||'')}"><div class="row"><button data-v="0">キャンセル</button><button class="pri" data-v="1">OK</button></div>`;
+  const inp=sh.querySelector('input');
+  sh.querySelector('[data-v="0"]').onclick=()=>close(null);
+  sh.querySelector('[data-v="1"]').onclick=()=>close(inp.value.trim()||null);
+  inp.addEventListener('keydown',e=>{if(e.key==='Enter')close(inp.value.trim()||null)});
+ });
+}
+function confirmBox(msg,ok,danger){
+ return sheet((sh,close)=>{
+  sh.innerHTML=`<p>${msg}</p><div class="row"><button data-v="0">キャンセル</button><button class="${danger?'dng':'pri'}" data-v="1">${esc(ok||'OK')}</button></div>`;
+  sh.querySelector('[data-v="0"]').onclick=()=>close(false);
+  sh.querySelector('[data-v="1"]').onclick=()=>close(true);
+ });
+}
+
+// 区画の切替
+document.getElementById('siteBtn').onclick=()=>sheet((sh,close)=>{
+ const ids=Object.keys(st.sites).sort((a,b)=>(st.sites[b].updated||0)-(st.sites[a].updated||0));
+ sh.innerHTML='<h2>区画（工事）</h2><div class="list">'+ids.map(id=>{
+  const s=st.sites[id];return `<button data-id="${id}" class="${id===st.currentId?'on':''}">${esc(s.name)}　<span style="color:var(--sub);font-size:12px">${s.rows.length}個</span></button>`}).join('')+
+  '</div><div class="row"><button id="nw" class="pri">＋ 新しい区画</button></div>';
+ sh.querySelectorAll('.list button').forEach(b=>b.onclick=()=>{st.currentId=b.dataset.id;save();render();close()});
+ sh.querySelector('#nw').onclick=async()=>{close();const n=await ask('新しい区画の名前','区画'+(ids.length+1));if(!n)return;const id=uid();st.sites[id]=newSite(n);st.currentId=id;save();render()};
+});
+
+// メニュー
+document.getElementById('menuBtn').onclick=()=>sheet((sh,close)=>{
+ sh.innerHTML=`<h2>面積の小数桁（四捨五入）</h2>
+ <div class="seg">${[2,3,4].map(d=>`<button data-d="${d}" class="${st.digits===d?'on':''}">${d}桁</button>`).join('')}</div>
+ <h2 style="margin-top:12px">この区画</h2><div class="list">
+ <button data-a="print">求積表を印刷・PDF</button>
+ <button data-a="csv">CSVで保存</button>
+ <button data-a="rename">名前を変更</button>
+ <button data-a="dup">複製</button>
+ <button data-a="del" class="dng">区画を削除</button></div>
+ <h2 style="margin-top:12px">データ全体</h2><div class="list">
+ <button data-a="backup">バックアップを保存</button>
+ <button data-a="restore">バックアップを読み込む</button></div>`;
+ sh.querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>{st.digits=+b.dataset.d;save();render();close()});
+ sh.querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>{close();act(b.dataset.a)});
+});
+
+async function act(a){
+ const s=cur();
+ if(a==='rename'){const n=await ask('区画の名前',s.name);if(n){s.name=n;save();render()}}
+ else if(a==='dup'){const id=uid();st.sites[id]=JSON.parse(JSON.stringify(s));st.sites[id].name=s.name+'（コピー）';st.sites[id].rows.forEach(r=>r.id=uid());st.currentId=id;save();render();toast('複製しました')}
+ else if(a==='del'){
+  if(!await confirmBox(`「${esc(s.name)}」を削除します。元に戻せません。`,'削除する',true))return;
+  delete st.sites[st.currentId];
+  if(!Object.keys(st.sites).length){const id=uid();st.sites[id]=newSite('区画1')}
+  st.currentId=Object.keys(st.sites)[0];save();render();
+ }
+ else if(a==='print')printTable();
+ else if(a==='csv')saveCSV();
+ else if(a==='backup')backup();
+ else if(a==='restore')document.getElementById('fileIn').click();
+}
+
+function today(){const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`}
+function download(name,text,type){
+ const blob=new Blob([text],{type});const a=document.createElement('a');
+ a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();
+ setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1000);
+}
+function safeName(s){return s.replace(/[\\/:*?"<>|\s]+/g,'_')}
+
+function printTable(){
+ const s=cur(),d=st.digits,t=totals();
+ const rows=s.rows.map(r=>{const c=calc(r);
+  if(c.st==='ok')return `<tr><td class="n">${esc(r.name)}</td><td>${fmt(c.a,3)}</td><td>${fmt(c.b,3)}</td><td>${fmt(c.c,3)}</td><td>${fmt(c.s,3)}</td><td>${fmt(c.sa,3)}</td><td>${fmt(c.sb,3)}</td><td>${fmt(c.sc,3)}</td><td>${fmt(rnd(c.area,d),d)}</td></tr>`;
+  if(c.st==='empty')return '';
+  return `<tr><td class="n">${esc(r.name)}</td><td>${esc(r.a)}</td><td>${esc(r.b)}</td><td>${esc(r.c)}</td><td colspan="5" style="text-align:left">${c.st==='err'?esc(c.msg):'未入力あり'}</td></tr>`}).join('');
+ document.getElementById('print').innerHTML=`<h1>求積表（ヘロンの公式）</h1>
+ <div class="meta">区画：${esc(s.name)}　　作成日：${today()}</div>
+ <table><thead><tr><th>名称</th><th>a (m)</th><th>b (m)</th><th>c (m)</th><th>s</th><th>s−a</th><th>s−b</th><th>s−c</th><th>面積 (m²)</th></tr></thead>
+ <tbody>${rows}<tr class="tr"><td class="n" colspan="8">合計</td><td>${fmt(t.sum,d)}</td></tr></tbody></table>
+ <div class="note">S = √{s(s−a)(s−b)(s−c)}　s = (a+b+c)/2　各面積は小数${d}位に四捨五入し、その合計を記載。</div>`;
+ setTimeout(()=>window.print(),50);
+}
+
+function saveCSV(){
+ const s=cur(),d=st.digits,t=totals();
+ const q=v=>'"'+String(v??'').replace(/"/g,'""')+'"';
+ const lines=[['名称','a','b','c','s','s-a','s-b','s-c','面積(m2)'].map(q).join(',')];
+ s.rows.forEach(r=>{const c=calc(r);if(c.st==='empty')return;
+  lines.push(c.st==='ok'?[r.name,fmt(c.a,3),fmt(c.b,3),fmt(c.c,3),fmt(c.s,3),fmt(c.sa,3),fmt(c.sb,3),fmt(c.sc,3),fmt(rnd(c.area,d),d)].map(q).join(','):[r.name,r.a,r.b,r.c,'','','','',c.msg||'未入力あり'].map(q).join(','))});
+ lines.push([ '合計','','','','','','','',fmt(t.sum,d)].map(q).join(','));
+ download(`求積_${safeName(s.name)}_${today()}.csv`,'\ufeff'+lines.join('\r\n'),'text/csv');
+}
+
+function backup(){
+ download(`heron_backup_${today()}.json`,JSON.stringify({app:'heron',version:1,exported:new Date().toISOString(),store:st},null,1),'application/json');
+}
+document.getElementById('fileIn').addEventListener('change',async e=>{
+ const f=e.target.files[0];e.target.value='';if(!f)return;
+ let data;try{data=JSON.parse(await f.text())}catch(err){toast('ファイルを読めませんでした');return}
+ const store=data&&data.app==='heron'&&data.store;
+ if(!store||!store.sites){toast('このアプリのバックアップではありません');return}
+ const mode=await sheet((sh,close)=>{
+  sh.innerHTML=`<h2>バックアップの読み込み</h2><p>${Object.keys(store.sites).length}個の区画が入っています。</p><div class="list"><button data-m="merge" class="pri">今のデータに追加する</button><button data-m="replace" class="dng">すべて置き換える</button><button data-m="">キャンセル</button></div>`;
+  sh.querySelectorAll('[data-m]').forEach(b=>b.onclick=()=>close(b.dataset.m||null));
+ });
+ if(!mode)return;
+ if(mode==='replace'){st=store;localStorage.setItem(KEY,JSON.stringify(st));load()}
+ else{for(const k in store.sites){const id=st.sites[k]?uid():k;st.sites[id]=store.sites[k];if(!Array.isArray(st.sites[id].rows))st.sites[id].rows=[]}}
+ save();render();toast('読み込みました');
+});
+
+load();render();
+if('serviceWorker' in navigator&&window.isSecureContext){navigator.serviceWorker.register('sw.js').catch(()=>{})}
+</script>
+</body>
+</html>

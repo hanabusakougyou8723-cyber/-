@@ -1,5 +1,5 @@
 /* 水準測量野帳 Service Worker — オフライン動作用 */
-const CACHE = "yacho-v4";
+const CACHE = "yacho-v5";
 
 // インストール時に本体を先読みしてキャッシュ（電波が無くても起動できるように）
 const PRECACHE = [

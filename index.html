@@ -73,6 +73,9 @@ header input::placeholder{color:rgba(255,255,255,.6)}
 .dlg-btns{display:flex;gap:8px;justify-content:flex-end;margin-top:6px}
 .dlg-btns .pbtn{padding:11px 18px}
 .dlg-btns .pbtn.danger{background:#C0392B;color:#fff}
+.colpick{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 4px}
+.colpick .pbtn{padding:8px 10px;font-size:12px;font-weight:600}
+.colpick .pbtn.primary{background:var(--green-d);color:#fff;border-color:var(--green-d)}
 .tabs{display:flex;background:var(--green-d);position:sticky;top:58px;z-index:29}
 .tabs button{
   flex:1;padding:11px 0;border:none;background:transparent;color:rgba(255,255,255,.65);
@@ -1200,7 +1203,7 @@ function stopVoice(){
     if(!("serviceWorker" in navigator)){ showSnack("この端末は非対応です"); return; }
     navigator.serviceWorker.getRegistration().then(reg=>{
       if(reg && navigator.serviceWorker.controller){
-        caches.has("yacho-v5").then(ok=>{
+        caches.has("yacho-v6").then(ok=>{
           showSnack(ok? "✓ オフライン対応ずみ(電波が無くても起動します)"
                       : "準備中です。数秒後にもう一度お試しください");
         });
@@ -1281,7 +1284,9 @@ function parseCsvText(text){
 
   let name="", date="", memo="";
   const items=[];
-  let cols=null;   // 列の並び {name:0, plan:1, bs:2, fs:3}
+  let cols=null;       // 列の並び {name:0, plan:1, bs:2, fs:3}
+  let headers=null;    // 列見出しの文字列（計画高の列を選ばせるのに使う）
+  const dataLines=[];  // データ行（列を選び直したときに読み直す）
 
   lines.forEach(line=>{
     const c=splitLine(line);
@@ -1292,6 +1297,7 @@ function parseCsvText(text){
     if(/^(メモ|備考|作業)$/.test(h)){ memo=c[1]||""; return; }
     // 列見出し行
     if(/^(測点|測点名|No|NO|点名)$/.test(h) && !/^\d/.test(c[1]||"")){
+      headers=c.slice();
       cols={};
       c.forEach((t,i)=>{
         const s=t.replace(/\s/g,"").toUpperCase();
@@ -1312,15 +1318,63 @@ function parseCsvText(text){
       return (v===""||isNaN(parseFloat(v)))? "" : v;
     };
     if(nm==="" && pick("plan")==="" && pick("bs")==="" && pick("fs")==="") return;
+    dataLines.push(c);
     items.push({name:nm, plan:pick("plan"), bs:pick("bs"), fs:pick("fs")});
   });
 
   if(items.length===0) throw new Error("データ行がありません");
+
+  // 計画高に使えそうな数値列を集める（「計画高」という列が無いCSV向け）
+  const numCols=[];
+  if(headers && dataLines.length){
+    headers.forEach((t,i)=>{
+      if(cols && (i===cols.name||i===cols.bs||i===cols.fs)) return;
+      let ok=0;
+      dataLines.forEach(c=>{
+        // 「3号」のような文字混じりの列は数値列とみなさない
+        const v=(c[i]||"").trim().replace(/,/g,"");
+        if(/^-?\d+(\.\d+)?\s*(m|ｍ)?$/i.test(v)) ok++;
+      });
+      if(ok>=Math.ceil(dataLines.length/2)) numCols.push({index:i, label:(t||("第"+(i+1)+"列"))});
+    });
+  }
   if(!date){
     const t=new Date();
     date=t.getFullYear()+"-"+String(t.getMonth()+1).padStart(2,"0")+"-"+String(t.getDate()).padStart(2,"0");
   }
-  return {name:name||"CSV取込", date:date, memo:memo, items:items};
+  return {name:name||"CSV取込", date:date, memo:memo, items:items,
+          numCols:numCols, dataLines:dataLines,
+          planCol:(cols&&cols.plan!==undefined)? cols.plan : null};
+}
+
+// 計画高に使う列を選び直す
+function usePlanColumn(ci){
+  if(!csvParsed) return;
+  const p=csvParsed;
+  p.items.forEach((it,i)=>{
+    const c=p.dataLines[i]||[];
+    const v=(c[ci]||"").replace(/[^0-9.\-]/g,"");
+    it.plan=(v===""||isNaN(parseFloat(v)))? "" : v;
+  });
+  p.planCol=ci;
+  importData=csvToStore(p);
+  renderCsvMsg();
+}
+function renderCsvMsg(){
+  const p=csvParsed;
+  const np=p.items.filter(x=>x.plan!=="").length;
+  const lab=(p.planCol!=null && p.numCols.length)
+      ? (p.numCols.find(c=>c.index===p.planCol)||{}).label : null;
+  let html=`CSV「${p.name}」${fmtDate(p.date)}${p.memo?(" "+p.memo):""}<br>`
+         + `測点${p.items.length}点・計画高${np}点`
+         + (lab? `（計画高に使う列：<b>${lab}</b>）` : "");
+  if(p.numCols.length>1){
+    html+=`<div style="margin-top:10px;font-size:12px;color:#666">計画高に入れる列を選べます</div>
+      <div class="colpick">`+
+      p.numCols.map(c=>`<button class="pbtn${c.index===p.planCol?" primary":""}"
+         onclick="usePlanColumn(${c.index})">${c.label}</button>`).join("")+`</div>`;
+  }
+  document.getElementById("importMsg").innerHTML=html;
 }
 
 // CSVを野帳の形へ
@@ -1359,7 +1413,7 @@ function readTextAuto(file){
   });
 }
 
-let importData=null;
+let importData=null, csvParsed=null;
 function importBackup(el){
   const f=el.files&&el.files[0];
   el.value="";
@@ -1369,10 +1423,15 @@ function importBackup(el){
     try{
       if(isCsv){
         const p=parseCsvText(text);
-        importData=csvToStore(p);
-        const np=p.items.filter(x=>x.plan!=="").length;
-        document.getElementById("importMsg").textContent=
-          `CSV「${p.name}」${fmtDate(p.date)}${p.memo?(" "+p.memo):""} ／ 測点${p.items.length}点・計画高${np}点を読み込みます`;
+        csvParsed=p;
+        // 「計画高」列が無いCSVは、数値列の中から自動で選んでおく
+        if(p.planCol==null && p.numCols.length){
+          const g=p.numCols.find(c=>/床掘|計画|設計/.test(c.label));
+          usePlanColumn(g? g.index : p.numCols[p.numCols.length-1].index);
+        }else{
+          importData=csvToStore(p);
+          renderCsvMsg();
+        }
       }else{
         const j=JSON.parse(text);
         const st=j.store||j;

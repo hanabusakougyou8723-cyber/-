@@ -548,7 +548,8 @@ td.adjv{font-weight:700}
     <button class="btn" onclick="checkOffline()">📶 オフライン確認</button>
     <button class="btn" onclick="exportBackup()">書き出し</button>
     <button class="btn" onclick="document.getElementById('importFile').click()">読み込み</button>
-    <input type="file" id="importFile" accept=".json,application/json" style="display:none" onchange="importBackup(this)">
+    <button class="btn" onclick="exportCsv()">CSV書出</button>
+    <input type="file" id="importFile" accept=".json,.csv,.txt,application/json,text/csv" style="display:none" onchange="importBackup(this)">
   </div>
   <div class="checksum" id="checksum"></div>
 </div>
@@ -1199,7 +1200,7 @@ function stopVoice(){
     if(!("serviceWorker" in navigator)){ showSnack("この端末は非対応です"); return; }
     navigator.serviceWorker.getRegistration().then(reg=>{
       if(reg && navigator.serviceWorker.controller){
-        caches.has("yacho-v4").then(ok=>{
+        caches.has("yacho-v5").then(ok=>{
           showSnack(ok? "✓ オフライン対応ずみ(電波が無くても起動します)"
                       : "準備中です。数秒後にもう一度お試しください");
         });
@@ -1228,30 +1229,166 @@ function exportBackup(){
   const cnt=Object.keys(store.projects).length;
   showSnack("バックアップを書き出しました(工事"+cnt+"件)");
 }
+/* --- CSV書き出し(今開いている野帳) --- */
+function csvCell(v){
+  v=(v==null?"":String(v));
+  return /[",\n]/.test(v)? '"'+v.replace(/"/g,'""')+'"' : v;
+}
+function exportCsv(){
+  syncCur();
+  const d=curDate();
+  const L=[];
+  L.push("工事名,"+csvCell(curProj().name||""));
+  L.push("日付,"+csvCell(d.date||""));
+  L.push("メモ,"+csvCell(d.memo||""));
+  L.push("測点,計画高,BS,FS");
+  rows.forEach((r,i)=>{
+    L.push([csvCell(r.name), csvCell(r.plan),
+            csvCell(r.bs), csvCell(i===0? "" : r.fs)].join(","));
+  });
+  // ExcelでそのままUTF-8と認識されるようBOMを付ける
+  const blob=new Blob(["﻿"+L.join("\r\n")],{type:"text/csv;charset=utf-8"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+  a.href=url;
+  a.download="yacho_"+(d.date||"data")+".csv";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+  showSnack("CSVを書き出しました("+rows.length+"行)");
+}
+
+/* --- CSV解析 --- */
+function parseCsvText(text){
+  text=text.replace(/^﻿/,"");                       // BOM除去
+  const delim = (text.split("\t").length > text.split(",").length) ? "\t" : ",";
+  const lines=text.split(/\r\n|\n|\r/).filter(l=>l.trim()!=="");
+  const splitLine=l=>{
+    const out=[]; let cur="", q=false;
+    for(let i=0;i<l.length;i++){
+      const c=l[i];
+      if(q){
+        if(c==='"'){ if(l[i+1]==='"'){cur+='"';i++;} else q=false; }
+        else cur+=c;
+      }else{
+        if(c==='"') q=true;
+        else if(c===delim){ out.push(cur); cur=""; }
+        else cur+=c;
+      }
+    }
+    out.push(cur);
+    return out.map(s=>s.trim());
+  };
+
+  let name="", date="", memo="";
+  const items=[];
+  let cols=null;   // 列の並び {name:0, plan:1, bs:2, fs:3}
+
+  lines.forEach(line=>{
+    const c=splitLine(line);
+    const h=c[0].replace(/\s/g,"");
+    // 見出し行(工事名/日付/メモ)
+    if(/^(工事名|現場名|工事)$/.test(h)){ name=c[1]||""; return; }
+    if(/^(日付|年月日)$/.test(h)){ date=(c[1]||"").replace(/\//g,"-"); return; }
+    if(/^(メモ|備考|作業)$/.test(h)){ memo=c[1]||""; return; }
+    // 列見出し行
+    if(/^(測点|測点名|No|NO|点名)$/.test(h) && !/^\d/.test(c[1]||"")){
+      cols={};
+      c.forEach((t,i)=>{
+        const s=t.replace(/\s/g,"").toUpperCase();
+        // 先に見つかった列を優先(紛らわしい列名に上書きされないように)
+        if(/測点|点名|^NO$/.test(s)){ if(cols.name===undefined) cols.name=i; }
+        else if(/計画高|計画|設計高|設計/.test(s)){ if(cols.plan===undefined) cols.plan=i; }
+        else if(/^BS$|後視/.test(s)){ if(cols.bs===undefined) cols.bs=i; }
+        else if(/^FS$|前視/.test(s)){ if(cols.fs===undefined) cols.fs=i; }
+      });
+      return;
+    }
+    // データ行
+    const idx = cols || {name:0, plan:1, bs:2, fs:3};
+    const nm=(c[idx.name]!==undefined? c[idx.name] : "").trim();
+    const pick=k=>{
+      if(idx[k]===undefined) return "";
+      const v=(c[idx[k]]||"").replace(/[^0-9.\-]/g,"");
+      return (v===""||isNaN(parseFloat(v)))? "" : v;
+    };
+    if(nm==="" && pick("plan")==="" && pick("bs")==="" && pick("fs")==="") return;
+    items.push({name:nm, plan:pick("plan"), bs:pick("bs"), fs:pick("fs")});
+  });
+
+  if(items.length===0) throw new Error("データ行がありません");
+  if(!date){
+    const t=new Date();
+    date=t.getFullYear()+"-"+String(t.getMonth()+1).padStart(2,"0")+"-"+String(t.getDate()).padStart(2,"0");
+  }
+  return {name:name||"CSV取込", date:date, memo:memo, items:items};
+}
+
+// CSVを野帳の形へ
+function csvToStore(p){
+  const rs=[];
+  const first=p.items[0];
+  const hasKbm = first && /^(KBM|BM|BM\.|KBM\.)/i.test(first.name.replace(/\s/g,""));
+  if(!hasKbm) rs.push({name:"KBM",bs:"",fs:"",gh0:"",plan:""});
+  p.items.forEach((it,i)=>{
+    const isKbmRow = (rs.length===0);
+    rs.push({ name: it.name,
+              bs: it.bs||"",
+              fs: isKbmRow? "" : (it.fs||""),
+              gh0:"",
+              plan: isKbmRow? "" : (it.plan||"") });
+  });
+  const did="d"+Date.now();
+  const pid="p"+Date.now();
+  return {projects:{[pid]:{name:p.name,
+            dates:{[did]:{date:p.date,memo:p.memo,rows:rs,knownH:"",grade:"10",routeKm:""}},
+            currentDateId:did}},
+          currentId:pid};
+}
+
+// 文字コードを判定して読む(ExcelのShift-JIS対応)
+function readTextAuto(file){
+  return file.arrayBuffer().then(buf=>{
+    const u8=new Uint8Array(buf);
+    let s;
+    try{ s=new TextDecoder("utf-8",{fatal:true}).decode(u8); }
+    catch(e){
+      try{ s=new TextDecoder("shift_jis").decode(u8); }
+      catch(e2){ s=new TextDecoder("utf-8").decode(u8); }
+    }
+    return s;
+  });
+}
+
 let importData=null;
 function importBackup(el){
   const f=el.files&&el.files[0];
   el.value="";
   if(!f) return;
-  const rd=new FileReader();
-  rd.onload=()=>{
+  const isCsv=/\.(csv|txt)$/i.test(f.name);
+  readTextAuto(f).then(text=>{
     try{
-      const j=JSON.parse(rd.result);
-      const st=j.store||j;
-      if(!st.projects) throw new Error("形式が違います");
-      importData=st;
-      const pn=Object.keys(st.projects).length;
-      let dn=0; Object.values(st.projects).forEach(p=>{ dn+=Object.keys(p.dates||{}).length; });
-      const when=j.exported? new Date(j.exported).toLocaleString("ja-JP"):"日時不明";
-      document.getElementById("importMsg").textContent=
-        `読み込むファイル: 工事${pn}件・日付データ${dn}件(書き出し ${when})`;
+      if(isCsv){
+        const p=parseCsvText(text);
+        importData=csvToStore(p);
+        const np=p.items.filter(x=>x.plan!=="").length;
+        document.getElementById("importMsg").textContent=
+          `CSV「${p.name}」${fmtDate(p.date)}${p.memo?(" "+p.memo):""} ／ 測点${p.items.length}点・計画高${np}点を読み込みます`;
+      }else{
+        const j=JSON.parse(text);
+        const st=j.store||j;
+        if(!st.projects) throw new Error("形式が違います");
+        importData=st;
+        const pn=Object.keys(st.projects).length;
+        let dn=0; Object.values(st.projects).forEach(p=>{ dn+=Object.keys(p.dates||{}).length; });
+        const when=j.exported? new Date(j.exported).toLocaleString("ja-JP"):"日時不明";
+        document.getElementById("importMsg").textContent=
+          `読み込むファイル: 工事${pn}件・日付データ${dn}件(書き出し ${when})`;
+      }
       document.getElementById("importDlg").classList.add("show");
     }catch(err){
-      showSnack("読み込めませんでした(ファイル形式を確認してください)");
+      showSnack("読み込めませんでした："+(err.message||"形式を確認してください"));
     }
-  };
-  rd.onerror=()=>showSnack("ファイルを開けませんでした");
-  rd.readAsText(f);
+  }).catch(()=>showSnack("ファイルを開けませんでした"));
 }
 function applyImport(merge){
   if(!importData){ closeDlg("importDlg"); return; }
